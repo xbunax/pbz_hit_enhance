@@ -71,7 +71,7 @@ def main():
     verify_native(package / "dwmapi.dll")
     output = ROOT / "build/panel-self-test.json"
     panel = data / "panel/HitstopPanel.exe"
-    subprocess.run(
+    completed = subprocess.run(
         [
             str(panel),
             "--self-test",
@@ -79,11 +79,12 @@ def main():
             "--mod-dir",
             str(data / "ue4ss/Mods/UnifiedHitstop"),
         ],
-        check=True,
+        check=False,
         timeout=60,
     )
     report = json.loads(output.read_text(encoding="utf-8"))
-    assert report["config_valid"] and report["hotkey_valid"]
+    assert completed.returncode == 0, report
+    assert report["config_valid"] and report["hotkey_valid"] and report["tk_window_created"]
     print("Packaged panel and all file checksums passed")
 
 

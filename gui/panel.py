@@ -563,13 +563,23 @@ def main():
 if __name__ == "__main__":
     if "--self-test" in sys.argv:
         destination = Path(sys.argv[sys.argv.index("--self-test") + 1])
-        configure.validate(configure.read())
-        result = {
-            "config_valid": True,
-            "hotkey_valid": normalize("CTRL+F10")[0] == "CTRL+F10",
-            "tk_version": str(tk.TkVersion),
-            "mod_dir": str(ROOT),
-        }
+        try:
+            configure.validate(configure.read())
+            window = tk.Tk()
+            window.withdraw()
+            ttk.Label(window, text="面板资源自检").pack()
+            window.update_idletasks()
+            window.destroy()
+            result = {
+                "config_valid": True,
+                "hotkey_valid": normalize("CTRL+F10")[0] == "CTRL+F10",
+                "tk_window_created": True,
+                "tk_version": str(tk.TkVersion),
+                "mod_dir": str(ROOT),
+            }
+        except Exception:
+            destination.write_text(json.dumps({"error": traceback.format_exc()}), encoding="utf-8")
+            raise SystemExit(1)
         destination.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         raise SystemExit(0)
     try:

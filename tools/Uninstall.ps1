@@ -2,7 +2,20 @@
 param()
 $ErrorActionPreference = 'Stop'
 $loader = Join-Path $PSScriptRoot 'dwmapi.dll'
-$manifestPath = Join-Path $PSScriptRoot 'PBZHitEnhance\package_manifest.json'
+$dataDirectory = Join-Path $PSScriptRoot 'PBZHitEnhance'
+$ini = Join-Path $PSScriptRoot 'PBZHitEnhance.ini'
+if (Test-Path -LiteralPath $ini) {
+    $inPaths = $false
+    foreach ($line in (Get-Content -LiteralPath $ini)) {
+        $line = $line.Trim()
+        if ($line -match '^\[(.+)\]$') { $inPaths = $Matches[1] -eq 'Paths'; continue }
+        if ($inPaths -and $line -match '^DataDirectory\s*=\s*(.+)$') {
+            $candidate = $Matches[1].Trim().Trim('"')
+            $dataDirectory = if ([IO.Path]::IsPathRooted($candidate)) { $candidate } else { Join-Path $PSScriptRoot $candidate }
+        }
+    }
+}
+$manifestPath = Join-Path $dataDirectory 'package_manifest.json'
 if (-not (Test-Path -LiteralPath $loader)) { Write-Host '未检测到加载 DLL。'; exit 0 }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 $expected = $manifest.'dwmapi.dll'

@@ -48,7 +48,7 @@ SlitheringSword 另支持配置中存在的 Slap 挥击类型；其他武器不�
 2. 在 Steam 中右键《影之刃零》→ 管理 → 浏览本地文件。
 3. 进入 `platform\steam` 文件夹，确认这里有体积约 487 MiB 的真实 `PBZ.exe`。本项目验证的路径为 `…\steamapps\common\PBZ\platform\steam\PBZ.exe`。
 4. 解压 Release，把 `dwmapi.dll` 和整个 `PBZHitEnhance` 文件夹复制到这个 `PBZ.exe` 旁。保留文件夹结构。
-5. 正常从 Steam 启动游戏。首次启动会打开快捷键设置，选择组合键并点击“保存快捷键”。以后面板在后台启动，使用保存的快捷键呼出或隐藏。
+5. 正常从 Steam 启动游戏。首次启动会打开快捷键设置，选择单键或组合键并点击“保存快捷键”。以后面板在后台启动，使用保存的快捷键呼出或隐藏。
 
 安装后结构如下：
 
@@ -122,7 +122,7 @@ DataDirectory=D:\Game_mod\PBZHitEnhance
 
 ## 常见问题
 
-- **按快捷键无反应**：确认游戏为窗口化/无边框。手动运行面板程序，在“快捷键”页换一个未被其他程序占用的组合键。首次可先选 Ctrl+F10。
+- **按快捷键无反应**：确认游戏为窗口化/无边框。手动运行面板程序，在“快捷键”页换一个未被其他程序占用的快捷键。支持 Insert、F1–F12、字母或数字单键，也可搭配 Ctrl / Alt / Shift。使用 Insert 单键时取消勾选全部修饰键，再选 INSERT 并保存。
 - **显示未连接**：检查 DLL 是否放在真实 `platform\steam\PBZ.exe` 旁，文件夹结构是否完整，并等待游戏进入场景。
 - **游戏更新后失效**：查看 `PBZHitEnhance\logs\loader.log`，若出现 `unsupported_game_skipped`，需等待兼容更新。
 - **找不到运行库或校验失败**：重新解压完整 Release；不要只复制 DLL。检查外置数据路径是否正确。

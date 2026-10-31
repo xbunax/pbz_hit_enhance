@@ -21,6 +21,7 @@ k.WaitForSingleObject.restype = W.DWORD
 k.CloseHandle.argtypes = [W.HANDLE]
 k.CloseHandle.restype = W.BOOL
 KEYS = {
+    "INSERT": 0x2D,
     **{f"F{i}": 0x6F + i for i in range(1, 13)},
     **{c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"},
 }
@@ -29,13 +30,13 @@ KEYS = {
 def normalize(value):
     parts = value.upper().replace("CONTROL", "CTRL").split("+")
     parts = [p.strip() for p in parts]
-    if len(parts) < 2 or parts[-1] not in KEYS:
-        raise ValueError("请选择修饰键 + F1–F12、字母或数字")
+    if parts[-1] == "INS":
+        parts[-1] = "INSERT"
+    if parts[-1] not in KEYS:
+        raise ValueError("请选择 Insert、F1–F12、字母或数字；修饰键可不选")
     mods = parts[:-1]
     if len(set(mods)) != len(mods) or any(p not in ("CTRL", "ALT", "SHIFT") for p in mods):
         raise ValueError("快捷键格式无效")
-    if not ("CTRL" in mods or "ALT" in mods):
-        raise ValueError("请至少选择 Ctrl 或 Alt，避免占用普通游戏按键")
     names = [n for n in ("CTRL", "ALT", "SHIFT") if n in mods]
     flags = sum({"CTRL": 2, "ALT": 1, "SHIFT": 4}[n] for n in names)
     return "+".join([*names, parts[-1]]), flags, KEYS[parts[-1]]

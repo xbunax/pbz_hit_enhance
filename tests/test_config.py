@@ -29,9 +29,25 @@ class ConfigurationTests(unittest.TestCase):
     def test_shortcut_normalization(self):
         self.assertEqual(normalize("Alt+Control+F10")[0], "CTRL+ALT+F10")
 
-    def test_shortcut_without_modifier_rejected(self):
-        with self.assertRaises(ValueError):
-            normalize("F10")
+    def test_single_key_shortcuts(self):
+        self.assertEqual(normalize("Insert"), ("INSERT", 0, 0x2D))
+        self.assertEqual(normalize(" ins "), ("INSERT", 0, 0x2D))
+        self.assertEqual(normalize("F10"), ("F10", 0, 0x79))
+        self.assertEqual(normalize("a"), ("A", 0, 0x41))
+        self.assertEqual(normalize("Shift+Insert"), ("SHIFT+INSERT", 4, 0x2D))
+
+    def test_malformed_shortcuts_rejected(self):
+        for value in (
+            "",
+            "CTRL+",
+            "+INSERT",
+            "CTRL+CTRL+INSERT",
+            "WIN+INSERT",
+            "INSERT+F10",
+            "F25",
+        ):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                normalize(value)
 
     def test_legacy_migration_and_roundtrip(self):
         old = "\n".join(k + "=" + configure.BASE_DEFAULT[k] for k in configure.BASE_KEYS)

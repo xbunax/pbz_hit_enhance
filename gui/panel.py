@@ -231,7 +231,7 @@ class Panel:
         ttk.Label(self.key_tab, text="呼出 / 隐藏面板", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             self.key_tab,
-            text="首次启动时设置一次，之后自动记住。\n至少选择 Ctrl 或 Alt；快捷键冲突时会提示。",
+            text="首次启动时设置一次，之后自动记住。\n不勾选修饰键即可使用 Insert 等单键；冲突时会提示。",
             style="Dim.TLabel",
             wraplength=580,
         ).pack(anchor="w", pady=(8, 20))
@@ -565,6 +565,10 @@ class Panel:
             if kind == "registered":
                 self.registering = False
                 self.shortcut = value
+                selected = value.split("+")
+                for name, variable in self.mod_vars.items():
+                    variable.set(name in selected[:-1])
+                self.key_var.set(selected[-1])
                 self.hotkey_label.set("呼出 / 隐藏：" + value)
                 self.hotkey_error.set("已保存：" + value)
                 try:
@@ -646,7 +650,8 @@ if __name__ == "__main__":
             window.destroy()
             result = {
                 "config_valid": True,
-                "hotkey_valid": normalize("CTRL+F10")[0] == "CTRL+F10",
+                "hotkey_valid": normalize("CTRL+F10")[0] == "CTRL+F10"
+                and normalize("Insert") == ("INSERT", 0, 0x2D),
                 "tk_window_created": True,
                 "tk_version": str(tk.TkVersion),
                 "mod_dir": str(ROOT),

@@ -136,3 +136,21 @@ class PanelTests(unittest.TestCase):
         self.assertIn("仅记录", self.p.connection.get())
         self.assertIn("双持", self.p.status_text.get())
         self.assertIn("4 → 4", self.p.status_text.get())
+
+    def test_single_insert_saved_and_restored_in_controls(self):
+        self.p.registering = False
+        for variable in self.p.mod_vars.values():
+            variable.set(False)
+        self.p.key_var.set("INSERT")
+        self.p.register_selected()
+        queued = []
+        while not self.p.worker.commands.empty():
+            queued.append(self.p.worker.commands.get_nowait())
+        self.assertEqual(queued[-1], ("set", "INSERT"))
+        self.p.events.put(("registered", "INSERT"))
+        self.p.poll()
+        self.assertEqual(self.p.shortcut, "INSERT")
+        self.assertEqual(self.p.key_var.get(), "INSERT")
+        self.assertFalse(any(v.get() for v in self.p.mod_vars.values()))
+        saved = json.loads((self.folder / "ui_settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["hotkey"], "INSERT")

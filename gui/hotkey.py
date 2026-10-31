@@ -4,12 +4,8 @@ import ctypes as C, ctypes.wintypes as W, queue, threading, time
 
 u = C.WinDLL("user32", use_last_error=True)
 k = C.WinDLL("kernel32", use_last_error=True)
-u.RegisterHotKey.argtypes = [W.HWND, C.c_int, W.UINT, W.UINT]
-u.RegisterHotKey.restype = W.BOOL
-u.UnregisterHotKey.argtypes = [W.HWND, C.c_int]
-u.UnregisterHotKey.restype = W.BOOL
-u.PeekMessageW.argtypes = [C.POINTER(W.MSG), W.HWND, W.UINT, W.UINT, W.UINT]
-u.PeekMessageW.restype = W.BOOL
+u.GetAsyncKeyState.argtypes = [C.c_int]
+u.GetAsyncKeyState.restype = C.c_short
 k.CreateMutexW.argtypes = [C.c_void_p, W.BOOL, W.LPCWSTR]
 k.CreateMutexW.restype = W.HANDLE
 k.CreateEventW.argtypes = [C.c_void_p, W.BOOL, W.BOOL, W.LPCWSTR]
@@ -20,26 +16,14 @@ k.WaitForSingleObject.argtypes = [W.HANDLE, W.DWORD]
 k.WaitForSingleObject.restype = W.DWORD
 k.CloseHandle.argtypes = [W.HANDLE]
 k.CloseHandle.restype = W.BOOL
-KEYS = {
-    "INSERT": 0x2D,
-    **{f"F{i}": 0x6F + i for i in range(1, 13)},
-    **{c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"},
-}
+from keybinds import normalize, SCAN_KEYS, ChordLatch, Recorder, chord_name
 
 
-def normalize(value):
-    parts = value.upper().replace("CONTROL", "CTRL").split("+")
-    parts = [p.strip() for p in parts]
-    if parts[-1] == "INS":
-        parts[-1] = "INSERT"
-    if parts[-1] not in KEYS:
-        raise ValueError("请选择 Insert、F1–F12、字母或数字；修饰键可不选")
-    mods = parts[:-1]
-    if len(set(mods)) != len(mods) or any(p not in ("CTRL", "ALT", "SHIFT") for p in mods):
-        raise ValueError("快捷键格式无效")
-    names = [n for n in ("CTRL", "ALT", "SHIFT") if n in mods]
-    flags = sum({"CTRL": 2, "ALT": 1, "SHIFT": 4}[n] for n in names)
-    return "+".join([*names, parts[-1]]), flags, KEYS[parts[-1]]
+def pressed_keys():
+    keys = {key for key in SCAN_KEYS if u.GetAsyncKeyState(key) & 0x8000}
+    if u.GetAsyncKeyState(0x5C) & 0x8000:
+        keys.add(0x5B)
+    return frozenset(keys)
 
 
 class SingleInstance:
@@ -67,9 +51,11 @@ class HotkeyWorker(threading.Thread):
         self.event = event
 
     def run(self):
-        active = None
-        active_id = None
-        msg = W.MSG()
+        latch = ChordLatch()
+        recorder = None
+        suspended = False
+        deadline = 0
+        preview = None
         running = True
         while running:
             while True:
@@ -80,28 +66,44 @@ class HotkeyWorker(threading.Thread):
                 if action == "stop":
                     running = False
                     break
-                if action == "set":
+                if action == "record":
+                    recorder = Recorder()
+                    suspended = True
+                    deadline = time.monotonic() + 15
+                    preview = None
+                elif action == "cancel":
+                    recorder = None
+                    suspended = False
+                    latch.armed = False
+                elif action == "set":
                     try:
-                        name, mods, key = normalize(value)
-                        if name != active:
-                            new_id = 2 if active_id == 1 else 1
-                            if not u.RegisterHotKey(None, new_id, mods | 0x4000, key):
-                                raise OSError(
-                                    C.get_last_error(),
-                                    "快捷键已被其他程序占用，或无法注册",
-                                )
-                            if active_id is not None:
-                                u.UnregisterHotKey(None, active_id)
-                            active = name
-                            active_id = new_id
+                        name, keys = normalize(value)
+                        latch = ChordLatch(keys)
+                        recorder = None
+                        suspended = False
                         self.outbox.put(("registered", name))
                     except Exception as exc:
                         self.outbox.put(("hotkey_error", str(exc)))
-            while u.PeekMessageW(C.byref(msg), None, 0, 0, 1):
-                if msg.message == 0x0312 and msg.wParam == active_id:
-                    self.outbox.put(("toggle", None))
+            if not running:
+                break
+            pressed = pressed_keys()
+            if recorder:
+                if time.monotonic() >= deadline:
+                    recorder = None
+                    suspended = False
+                    latch.armed = False
+                    self.outbox.put(("capture_cancelled", "录入超时，保留原快捷键。"))
+                else:
+                    captured = recorder.step(pressed)
+                    current = chord_name(recorder.chord)
+                    if current != preview:
+                        preview = current
+                        self.outbox.put(("capture_preview", current))
+                    if captured:
+                        recorder = None
+                        self.outbox.put(("captured", captured))
+            elif not suspended and latch.step(pressed):
+                self.outbox.put(("toggle", None))
             if self.event and k.WaitForSingleObject(self.event, 0) == 0:
                 self.outbox.put(("show", None))
-            time.sleep(0.025)
-        if active_id is not None:
-            u.UnregisterHotKey(None, active_id)
+            time.sleep(0.015)

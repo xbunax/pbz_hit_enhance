@@ -30,11 +30,11 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(normalize("Alt+Control+F10")[0], "CTRL+ALT+F10")
 
     def test_single_key_shortcuts(self):
-        self.assertEqual(normalize("Insert"), ("INSERT", 0, 0x2D))
-        self.assertEqual(normalize(" ins "), ("INSERT", 0, 0x2D))
-        self.assertEqual(normalize("F10"), ("F10", 0, 0x79))
-        self.assertEqual(normalize("a"), ("A", 0, 0x41))
-        self.assertEqual(normalize("Shift+Insert"), ("SHIFT+INSERT", 4, 0x2D))
+        self.assertEqual(normalize("Insert"), ("INSERT", frozenset({0x2D})))
+        self.assertEqual(normalize(" ins "), ("INSERT", frozenset({0x2D})))
+        self.assertEqual(normalize("F10"), ("F10", frozenset({0x79})))
+        self.assertEqual(normalize("a"), ("A", frozenset({0x41})))
+        self.assertEqual(normalize("Shift+Insert"), ("SHIFT+INSERT", frozenset({0x10, 0x2D})))
 
     def test_malformed_shortcuts_rejected(self):
         for value in (
@@ -42,8 +42,6 @@ class ConfigurationTests(unittest.TestCase):
             "CTRL+",
             "+INSERT",
             "CTRL+CTRL+INSERT",
-            "WIN+INSERT",
-            "INSERT+F10",
             "F25",
         ):
             with self.subTest(value=value), self.assertRaises(ValueError):

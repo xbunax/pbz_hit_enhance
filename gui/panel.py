@@ -5,7 +5,7 @@ import json, os, queue, sys, time, traceback
 import tkinter as tk
 from tkinter import ttk
 import configure
-from hotkey import HotkeyWorker, SingleInstance, KEYS, normalize
+from hotkey import HotkeyWorker, SingleInstance, normalize
 from paths import mod_root
 
 ROOT = mod_root()
@@ -49,6 +49,8 @@ class Panel:
         self.editing_profile = "Global"
         self.value_mode = "scale"
         self.registering = False
+        self.recording = False
+        self.capture_pending = False
         self.drag_origin = None
         self.root.title("影之刃零 · 卡肉调节")
         self.root.withdraw()
@@ -231,27 +233,38 @@ class Panel:
         ttk.Label(self.key_tab, text="呼出 / 隐藏面板", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             self.key_tab,
-            text="首次启动时设置一次，之后自动记住。\n不勾选修饰键即可使用 Insert 等单键；冲突时会提示。",
+            text="点击录入，然后按住单个按键或同时按住组合键，全部松开后保存。\n例如 Insert、Ctrl+Insert、A+B。无需从固定列表选择。",
             style="Dim.TLabel",
             wraplength=580,
         ).pack(anchor="w", pady=(8, 20))
-        self.mod_vars = {n: tk.BooleanVar(value=n == "CTRL") for n in ("CTRL", "ALT", "SHIFT")}
+        self.key_var = tk.StringVar(value="尚未录入")
+        ttk.Label(
+            self.key_tab, textvariable=self.key_var, style="Value.TLabel", wraplength=580
+        ).pack(anchor="w", pady=12)
         row = ttk.Frame(self.key_tab)
         row.pack(fill="x")
-        for n, v in self.mod_vars.items():
-            ttk.Checkbutton(row, text=n.title(), variable=v).pack(side="left", padx=(0, 18))
-        self.key_var = tk.StringVar(value="F10")
-        ttk.Combobox(
-            row, textvariable=self.key_var, values=list(KEYS), state="readonly", width=8
-        ).pack(side="right")
-        self.hotkey_error = tk.StringVar(value="选择后点击保存。")
+        self.record_button = ttk.Button(row, text="点击录入按键", command=self.start_recording)
+        self.record_button.pack(side="left")
+        ttk.Button(row, text="取消录入", command=self.cancel_recording).pack(side="left", padx=10)
+        self.hotkey_error = tk.StringVar(value="录入后点击保存；取消会保留原快捷键。")
         ttk.Label(
             self.key_tab,
             textvariable=self.hotkey_error,
             style="Dim.TLabel",
             wraplength=580,
         ).pack(anchor="w", pady=18)
-        ttk.Button(self.key_tab, text="保存快捷键", command=self.register_selected).pack(anchor="w")
+        self.key_save_button = ttk.Button(
+            self.key_tab, text="保存快捷键", command=self.register_selected, state="disabled"
+        )
+        self.key_save_button.pack(anchor="w")
+        self.root.bind("<FocusOut>", self.capture_focus_out, add="+")
+        self.tabs.bind("<<NotebookTabChanged>>", self.capture_tab_changed, add="+")
+        ttk.Label(
+            self.key_tab,
+            text="支持键盘单键及多键同时组合，左右修饰键视为同一个键。\n系统保留快捷键可能被 Windows 优先处理；按键仍会传给游戏。",
+            style="Dim.TLabel",
+            wraplength=580,
+        ).pack(anchor="w", pady=(16, 0))
         ttk.Separator(self.key_tab).pack(fill="x", pady=20)
         ttk.Label(
             self.key_tab,
@@ -461,29 +474,55 @@ class Panel:
     def setup_hotkey(self):
         self.show()
         self.tabs.select(self.key_tab)
-        current = (self.shortcut or "CTRL+F10").split("+")
-        for n, v in self.mod_vars.items():
-            v.set(n in current)
-        self.key_var.set(current[-1])
+        self.key_var.set(self.shortcut or "尚未录入")
         self.hotkey_error.set(
-            "首次使用：保存一个呼出快捷键。"
-            if not self.shortcut
-            else "当前快捷键：" + self.shortcut
+            "首次使用：点击录入按键。" if not self.shortcut else "当前快捷键：" + self.shortcut
         )
 
+    def start_recording(self):
+        if self.registering:
+            return
+        self.show()
+        self.tabs.select(self.key_tab)
+        self.record_button.focus_set()
+        self.recording = True
+        self.capture_pending = True
+        self.key_save_button.configure(state="disabled")
+        self.key_var.set("等待按键…")
+        self.hotkey_error.set(
+            "先松开已按住的键，再按下想用的单键或组合，全部松开结束。15 秒内有效。"
+        )
+        self.worker.commands.put(("record", None))
+
+    def cancel_recording(self, message="已取消，保留原快捷键。"):
+        self.recording = False
+        self.capture_pending = False
+        self.worker.commands.put(("cancel", None))
+        self.key_var.set(self.shortcut or "尚未录入")
+        self.key_save_button.configure(state="disabled")
+        self.hotkey_error.set(message)
+
+    def capture_focus_out(self, event=None):
+        def check():
+            if self.capture_pending and self.root.focus_displayof() is None:
+                self.cancel_recording("窗口失去焦点，已取消录入。")
+
+        self.root.after_idle(check)
+
+    def capture_tab_changed(self, event=None):
+        if self.capture_pending and self.tabs.select() != str(self.key_tab):
+            self.cancel_recording()
+
     def register_selected(self):
+        if self.recording or self.registering or not self.capture_pending:
+            return
         try:
-            value = "+".join(
-                [*[n for n, v in self.mod_vars.items() if v.get()], self.key_var.get()]
-            )
-            value = normalize(value)[0]
+            value = normalize(self.key_var.get())[0]
         except ValueError as exc:
             self.hotkey_error.set(str(exc))
             return
-        if self.registering:
-            return
         self.registering = True
-        self.hotkey_error.set("正在检查快捷键是否可用…")
+        self.hotkey_error.set("正在保存快捷键…")
         self.worker.commands.put(("set", value))
 
     def show(self):
@@ -494,6 +533,8 @@ class Panel:
             self.dialog.lift()
 
     def hide(self):
+        if self.capture_pending:
+            self.cancel_recording()
         if not self.shortcut:
             self.setup_hotkey()
             return
@@ -565,10 +606,10 @@ class Panel:
             if kind == "registered":
                 self.registering = False
                 self.shortcut = value
-                selected = value.split("+")
-                for name, variable in self.mod_vars.items():
-                    variable.set(name in selected[:-1])
-                self.key_var.set(selected[-1])
+                self.recording = False
+                self.capture_pending = False
+                self.key_var.set(value)
+                self.key_save_button.configure(state="disabled")
                 self.hotkey_label.set("呼出 / 隐藏：" + value)
                 self.hotkey_error.set("已保存：" + value)
                 try:
@@ -585,12 +626,21 @@ class Panel:
                 if self.dialog and self.dialog.winfo_exists():
                     self.dialog.destroy()
                     self.dialog = None
+            elif kind == "capture_preview" and self.recording:
+                self.key_var.set(value or "等待按键…")
+            elif kind == "captured" and self.recording:
+                self.recording = False
+                self.key_var.set(value)
+                self.key_save_button.configure(state="normal")
+                self.hotkey_error.set("已录入：" + value + "。点击保存生效，或取消保留原快捷键。")
+            elif kind == "capture_cancelled" and self.recording:
+                self.cancel_recording(value)
             elif kind == "hotkey_error":
                 self.registering = False
                 self.show()
                 self.setup_hotkey()
                 self.hotkey_error.set(value)
-            elif kind == "toggle":
+            elif kind == "toggle" and not self.capture_pending:
                 if self.root.state() == "withdrawn":
                     self.show()
                 else:
@@ -651,7 +701,8 @@ if __name__ == "__main__":
             result = {
                 "config_valid": True,
                 "hotkey_valid": normalize("CTRL+F10")[0] == "CTRL+F10"
-                and normalize("Insert") == ("INSERT", 0, 0x2D),
+                and normalize("Insert")[0] == "INSERT"
+                and normalize("b+a")[0] == "A+B",
                 "tk_window_created": True,
                 "tk_version": str(tk.TkVersion),
                 "mod_dir": str(ROOT),

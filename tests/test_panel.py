@@ -137,20 +137,46 @@ class PanelTests(unittest.TestCase):
         self.assertIn("双持", self.p.status_text.get())
         self.assertIn("4 → 4", self.p.status_text.get())
 
-    def test_single_insert_saved_and_restored_in_controls(self):
+    def test_recorded_chord_saved_and_restored(self):
         self.p.registering = False
-        for variable in self.p.mod_vars.values():
-            variable.set(False)
-        self.p.key_var.set("INSERT")
+        self.p.start_recording()
+        self.assertTrue(self.p.recording)
+        self.p.events.put(("captured", "A+B"))
+        self.p.poll()
+        self.assertFalse(self.p.recording)
         self.p.register_selected()
         queued = []
         while not self.p.worker.commands.empty():
             queued.append(self.p.worker.commands.get_nowait())
-        self.assertEqual(queued[-1], ("set", "INSERT"))
+        self.assertEqual(queued[-1], ("set", "A+B"))
+        self.p.events.put(("registered", "A+B"))
+        self.p.poll()
+        self.assertEqual(self.p.shortcut, "A+B")
+        self.assertEqual(self.p.key_var.get(), "A+B")
+        saved = json.loads((self.folder / "ui_settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["hotkey"], "A+B")
+
+    def test_cancel_recording_preserves_binding_and_file(self):
         self.p.events.put(("registered", "INSERT"))
         self.p.poll()
+        before = (self.folder / "ui_settings.json").read_bytes()
+        self.p.start_recording()
+        self.p.events.put(("captured", "CTRL+F9"))
+        self.p.poll()
+        self.p.cancel_recording()
         self.assertEqual(self.p.shortcut, "INSERT")
         self.assertEqual(self.p.key_var.get(), "INSERT")
-        self.assertFalse(any(v.get() for v in self.p.mod_vars.values()))
-        saved = json.loads((self.folder / "ui_settings.json").read_text(encoding="utf-8"))
-        self.assertEqual(saved["hotkey"], "INSERT")
+        self.assertEqual((self.folder / "ui_settings.json").read_bytes(), before)
+        self.assertFalse(self.p.capture_pending)
+
+    def test_recording_suppresses_old_toggle_and_stale_capture(self):
+        self.p.events.put(("registered", "INSERT"))
+        self.p.poll()
+        self.p.start_recording()
+        self.p.events.put(("toggle", None))
+        self.p.poll()
+        self.assertNotEqual(self.root.state(), "withdrawn")
+        self.p.cancel_recording()
+        self.p.events.put(("captured", "A+B"))
+        self.p.poll()
+        self.assertEqual(self.p.key_var.get(), "INSERT")

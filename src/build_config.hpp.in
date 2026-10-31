@@ -1,0 +1,4 @@
+#pragma once
+inline constexpr char GAME_HASH[]="@GAME_HASH@";
+inline constexpr char RUNTIME_HASH[]="@RUNTIME_HASH@";
+inline constexpr char PROJECT_VERSION[]="@PROJECT_VERSION@";

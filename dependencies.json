@@ -1,0 +1,14 @@
+{
+  "ue4ss": {
+    "version": "v3.0.1-1183-gcdbc0b66",
+    "url": "https://github.com/KintaroModding/ue4ss/releases/download/v3.0.1-1183-gcdbc0b66/phantombladezero_ue4ss_v3.0.1-1183-gcdbc0b66.zip",
+    "archive_sha256": "5328f91d13bd93f080fafae9e7c07790ae838d65e94545831d6676c4c1870d4d",
+    "dll_sha256": "c273e7228687b647226fd63d7ca65888d313ece6be18996ec1320d00a5efe1f8",
+    "upstream_commit": "cdbc0b66cb2bb5b4a3d2f69b6e61a8460961e54c"
+  },
+  "game": {
+    "steam_build": "26266538",
+    "engine": "5.7.4",
+    "exe_sha256": "7b4fcd286a350780faf0824d73aa150b21cbf1bccde883e6a96386cbe09973b4"
+  }
+}

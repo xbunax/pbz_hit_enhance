@@ -1,0 +1,17 @@
+/build/
+/dist/
+/.venv/
+/.cache/
+__pycache__/
+*.pyc
+*.obj
+*.pdb
+*.lib
+*.exp
+*.dll
+*.exe
+*.log
+*.tmp
+ui_settings.json
+status.ini
+config.*.tmp

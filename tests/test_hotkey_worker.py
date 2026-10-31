@@ -87,3 +87,15 @@ class WorkerTests(unittest.TestCase):
         self.keys()
         self.keys(45)
         self.receive("toggle")
+
+
+class NativeKeyStateTests(unittest.TestCase):
+    def test_stuck_media_state_does_not_pollute_keyboard_chord(self):
+        import hotkey
+        from unittest.mock import patch
+
+        def state(key):
+            return -32768 if key in (0xB3, 17, 121) else 0
+
+        with patch.object(hotkey.u, "GetAsyncKeyState", side_effect=state):
+            self.assertEqual(hotkey.pressed_keys(), frozenset({17, 121}))

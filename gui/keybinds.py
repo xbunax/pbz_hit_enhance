@@ -47,10 +47,10 @@ KEYS = {
     "RBRACKET": 0xDD,
     "QUOTE": 0xDE,
 }
-# Left/right modifiers are equivalent; do not scan their duplicate VK codes.
-SCAN_KEYS = frozenset(range(8, 255)) - {0x5C, *range(0xA0, 0xA6)}
-for _vk in sorted(SCAN_KEYS - set(KEYS.values())):
-    KEYS[f"VK_{_vk:02X}"] = _vk
+# Poll keyboard keys we can bind, not reserved VKs or media-device state.
+# A multimedia device may report PLAY/PAUSE as held indefinitely.
+# Left/right modifiers are equivalent; their duplicate VK codes are not scanned.
+SCAN_KEYS = frozenset(KEYS.values())
 NAMES = {vk: name for name, vk in KEYS.items()}
 ALIASES = {"CONTROL": "CTRL", "INS": "INSERT", "ESCAPE": "ESC", "RETURN": "ENTER", "DEL": "DELETE"}
 MODIFIERS = (0x11, 0x12, 0x10, 0x5B)
@@ -83,7 +83,8 @@ class ChordLatch:
     def step(self, pressed):
         if not self.keys.intersection(pressed):
             self.armed = True
-        if self.keys and self.armed and pressed == self.keys:
+        modifiers_match = set(pressed).intersection(MODIFIERS) == self.keys.intersection(MODIFIERS)
+        if self.keys and self.armed and self.keys.issubset(pressed) and modifiers_match:
             self.armed = False
             return True
         return False

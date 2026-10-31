@@ -28,12 +28,11 @@ class ChordTests(unittest.TestCase):
             [False, False, True, False, False, False, False, True],
         )
 
-    def test_extra_keys_and_initial_hold_do_not_trigger(self):
+    def test_extra_modifiers_and_initial_hold_do_not_trigger(self):
         latch = ChordLatch({45})
         self.assertFalse(latch.step({45}))
         self.assertFalse(latch.step(set()))
         self.assertFalse(latch.step({17, 45}))
-        self.assertFalse(latch.step({65, 45}))
         self.assertTrue(latch.step({45}))
 
     def test_recording_waits_for_old_keys_then_captures_chord(self):
@@ -52,3 +51,20 @@ class ChordTests(unittest.TestCase):
             record.step(set())
             record.step({key})
             self.assertEqual(record.step(set()), name)
+
+    def test_unrelated_game_and_media_keys_do_not_block_shortcut(self):
+        latch = ChordLatch({17, 121})
+        self.assertFalse(latch.step({0xB3, 87}))
+        self.assertTrue(latch.step({0xB3, 87, 17, 121}))
+        self.assertFalse(latch.step({0xB3, 87, 17, 121}))
+        latch.step({0xB3, 87})
+        self.assertFalse(latch.step({0xB3, 87, 17, 18, 121}))
+
+    def test_media_and_reserved_keys_are_not_captured(self):
+        from keybinds import SCAN_KEYS
+
+        self.assertNotIn(0xB3, SCAN_KEYS)
+        self.assertNotIn(0xFF, SCAN_KEYS)
+        self.assertIn(45, SCAN_KEYS)
+        self.assertIn(17, SCAN_KEYS)
+        self.assertIn(121, SCAN_KEYS)

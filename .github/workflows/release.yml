@@ -66,6 +66,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/*.zip dist/SHA256SUMS.txt \
+          release_flags=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_flags+=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_TAG" dist/*.zip dist/SHA256SUMS.txt "${release_flags[@]}" \
             --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "PBZ Hit Enhance $RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md

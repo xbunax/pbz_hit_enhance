@@ -34,7 +34,7 @@ policy.select(config, attackTag) 先按候选攻击标签族分类，再返回�
 
 配置继续采用白名单平面键：原有六项必填，ObserveOnly 可选；Blade / DoubleBlade / GreatBlade 的 Override、Mode、Scale、AddFrames、FixedFrames、MaxFrames 使用点号前缀。某类完全缺省表示继承全局；部分缺失、未知键、重复键或越界值会使整份配置失效，停止写入。总 Enabled 和 ObserveOnly 对所有类别生效。
 
-分类表是基于攻击标签的初始候选，不能由 EWeaponType 枚举存在推导出所有标签的准确归属。面板显式标记待实测；运行状态和日志输出 attack_type、group、profile、reason，便于三类武器分段采样校正。未知标签不猜测，回退全局。
+分类表是基于攻击标签的初始候选，不能由 EWeaponType 枚举存在推导出所有标签的准确归属。界面提供三类编辑选项，候选映射的验证范围见 README；运行状态和日志输出 attack_type、group、profile、reason，便于三类武器分段采样校正。未知标签不猜测，回退全局。
 
 面板切换类别前保存当前编辑值；模式切换分别保留各模式数值；重置只作用于当前类别。123 项 Lua 场景涵盖实际回调、三类交替命中、未知标签回退、禁用/只读、热更新与错误恢复。Tk 测试使用隔离配置与假快捷键工作线程，不注册系统快捷键。
 
@@ -42,10 +42,16 @@ policy.select(config, attackTag) 先按候选攻击标签族分类，再返回�
 
 在重载包含 LuanYing、SnakeDualShort、SnakeDualLong 的映射后，使用独立固定帧数 5/7/9 测试单手、双持、双手重武器。67 次 GetEffectData 反馈中，分别有 19、11、10 次写入；全部 40 次修改后都紧邻出现一致的 StartSlomoData 帧数、倍率和曲线。另一次双持零帧保持为零，13 次非普通反馈、13 次全局恒等反馈保持原值，无错误记录。
 
-单手样本包括 16 次 LuanYing、3 次 TangBlade.Player，不能把后者未经来源关联就算作乱莺剑特有标签。双持的长、短刃都归 DoubleBlade；ZhanMaBlade 归 GreatBlade。材质为 Shield.Iron / Vessel，敌我身份过滤、全武器覆盖、肉体材质及本轮热调参/关闭恢复验证仍有范围限制。相邻下游匹配不能替代完整调用栈关联。
+单手样本包括 16 次 LuanYing、3 次 TangBlade.Player，不能把后者未经来源关联就算作乱莺剑特有标签。双持的长、短刃都归 DoubleBlade；ZhanMaBlade 归 GreatBlade。材质为 Shield.Iron / Vessel，敌我身份过滤、全武器覆盖、肉体材质及总开关关闭恢复验证仍有范围限制。后续单手 3/4 倍和双持 3/4 倍已验证参数热更新后的下游匹配。相邻下游匹配不能替代完整调用栈关联。
 
 ## 主武器覆盖审计
 
 DT_WeaponData 中 WeaponType 枚举值 1/2/3 对应 Blade/DoubleBlade/GreatBlade，33 条配置的数量为 15/8/10。实际读取的主武器配置中，多数资源未加载，已加载的 Attack Type Mapping 字段为空；因此没有使用这个空字段自动推导所有招式。新增分类只根据武器资料的类别、命名可关联的资源/标签及反馈选择规则建立候选关联，未强制加载额外资源或调用游戏函数。
 
 24 个标签族为 25 条配置提供候选关联。已审查的选择规则标签无跨类别冲突，但不代表所有未枚举标签无冲突。SlitheringSword.Slap 是明确单独处理的例外；煞器标签 Mojian/BrutalAxe/XueDiZi、通用 Default、能量与踢击不被误塞进这三类。剩余 8 条记录和每把武器的招式完整性仍需补充证据。新增映射写入预览目录后，当前已加载 Lua 不热重载，需下一次游戏进程加载才生效。
+
+## 快捷键录入与匹配
+
+快捷键保存在 ui_settings.json，以规范化键名表示，兼容旧 CTRL+F10。后台线程使用 GetAsyncKeyState 的当前按下状态位，录入时暂时停止触发，按键全部松开后提供待保存组合；取消、失焦和超时保留旧配置。匹配支持常规键盘单键与多个普通键，左右修饰键等价。
+
+仅采样支持绑定的常规键盘键，不扫描保留 VK 或媒体设备状态。已复现本机媒体播放/暂停键持续置位；旧“全键集合完全相等”逻辑因此阻断 Ctrl+F10。现匹配要求绑定键全部按下且修饰键集合准确，无关普通键不阻断；完整松开绑定键后才能再次触发。原始按键状态不写入日志，仅保存用户确认的快捷键。该机制不拦截游戏输入，也不覆盖 Windows 系统保留行为。

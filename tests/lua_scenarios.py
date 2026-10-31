@@ -146,9 +146,9 @@ ExecuteInGameThread=function(fn) fn() end
 LoopAsync=function(_,fn) POLL=fn end
 function wrap(v) return {get=function() return v end} end
 function tag(s) return wrap({TagName={ToString=function() return s end}}) end
-function fire(d,strength)
+function fire(d,strength,attack)
  for path,fn in pairs(HOOKS) do if path:match(':GetEffectData$') then
- fn(nil,tag('Test.Attack'),tag(strength),tag('Hitreact.Material.Meat'),nil,wrap(d),nil,nil)
+ fn(nil,tag(attack or 'Test.Attack'),tag(strength),tag('Hitreact.Material.Meat'),nil,wrap(d),nil,nil)
  end end
 end
 """)
@@ -194,6 +194,159 @@ lua.globals().POLL()
 d.Frames = 4
 lua.globals().fire(d, normal)
 check("missing_config_disables", lambda: eq(d.Frames, 4))
+# Profile routing through the real Lua entry callback, including live config reload.
+import sys
+
+sys.path.insert(0, str(ROOT.parents[1] / "gui"))
+import configure
+
+profile_config = configure.defaults()
+profile_config.update({"Scale": "2"})
+for name, frames in [("Blade", 5), ("DoubleBlade", 7), ("GreatBlade", 9)]:
+    profile_config.update(
+        {name + ".Override": "true", name + ".Mode": "fixed", name + ".FixedFrames": str(frames)}
+    )
+
+
+def load_profiles(**updates):
+    value = profile_config | updates
+    lua.globals().CONFIG_RAW = configure.serialize(value)
+    lua.globals().POLL()
+
+
+def hit(attack, frames=4, strength=normal, duration=False):
+    d.Frames = frames
+    d.UseSlomoDuration = duration
+    lua.globals().fire(d, strength, attack)
+    return d.Frames
+
+
+load_profiles()
+for attack, group, expected in [
+    ("HitReact.AttackType.Physical.Slash.TangBlade.Player", "Blade", 5),
+    ("HitReact.AttackType.Physical.Stab.BronzeSword", "Blade", 5),
+    ("HitReact.AttackType.Physical.Slash.LuanYing.Default", "Blade", 5),
+    ("HitReact.AttackType.Physical.Stab.LuanYing", "Blade", 5),
+    ("HitReact.AttackType.Physical.Slash.DoubleBlade", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Stab.DoubleBlade.Player", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Slash.SnakeDualShort.Player", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Slash.SnakeDualLong.Player", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Stab.SnakeDualLong.Player", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Slash.ZhanMaBlade", "GreatBlade", 9),
+    ("HitReact.AttackType.Physical.Stab.LongBlade", "GreatBlade", 9),
+    ("hitreact.attacktype.physical.slash.horizontal.player", "GreatBlade", 9),
+    ("HitReact.AttackType.Physical.Slash.DualHook.Default", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Slash.DualHook.DoubleBlade", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Stab.PoJun", "GreatBlade", 9),
+    ("HitReact.AttackType.Physical.Slash.PoJun", "GreatBlade", 9),
+    ("HitReact.AttackType.Physical.Slap.SlitheringSword", "Blade", 5),
+    ("HitReact.AttackType.Physical.Slash.Iron", "Blade", 5),
+    ("HitReact.AttackType.Physical.Slash.CiGuHunDun.TangBlade", "Blade", 5),
+    ("HitReact.AttackType.Physical.Slash.JadeDualChakram", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Stab.Jigsaw.Player", "GreatBlade", 9),
+    ("HitReact.AttackType.Physical.Slash.YaoJu", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Slash.YanYueDao", "GreatBlade", 9),
+    ("HitReact.AttackType.Physical.Slash.Wood", "Blade", 5),
+    ("HitReact.AttackType.Physical.Slash.ChiZheCanJian", "Blade", 5),
+    ("HitReact.AttackType.Physical.Slash.ShuangYue", "DoubleBlade", 7),
+    ("HitReact.AttackType.Physical.Slash.ZiMingJian", "Blade", 5),
+    ("HitReact.AttackType.Physical.Slash.BaiYing", "GreatBlade", 9),
+]:
+    check(
+        "classify_" + attack, lambda attack=attack, group=group: eq(policy.classify(attack), group)
+    )
+    check("route_" + attack, lambda attack=attack, expected=expected: eq(hit(attack), expected))
+for attack in [
+    "None",
+    "HitReact.AttackType.Physical.Kick",
+    "HitReact.AttackType.Physical.Slash.Default",
+    "HitReact.AttackType.Physical.Slash.TangBladeFake",
+    "HitReact.AttackType.Physical.Slash.TangBlade-Fake",
+    "HitReact.AttackType.Energy.DoubleBlade",
+    "HitReact.AttackType.Physical.Slash..Player",
+    "HitReact.AttackType.Physical.Slash.Mojian",
+    "HitReact.AttackType.Physical.Slash.BrutalAxe",
+    "HitReact.AttackType.Physical.Slash.XueDiZi",
+    "HitReact.AttackType.Physical.Slap.DoubleBlade",
+    "HitReact.AttackType.Physical.Slash.DualHookFake",
+]:
+    check(
+        "unknown_" + attack,
+        lambda attack=attack: eq((policy.classify(attack), hit(attack)), ("Unknown", 8)),
+    )
+tang = "HitReact.AttackType.Physical.Slash.TangBlade.Player"
+double = "HitReact.AttackType.Physical.Slash.DoubleBlade"
+heavy = "HitReact.AttackType.Physical.Slash.ZhanMaBlade"
+check(
+    "alternating_categories_do_not_leak",
+    lambda: eq([hit(x) for x in [tang, double, heavy, tang]], [5, 7, 9, 5]),
+)
+check(
+    "profile_preserves_curve_and_multiplier",
+    lambda: eq((d.Multiplier, d.SlomoCurve), (0.7, "unchanged")),
+)
+check("profile_skips_zero", lambda: eq(hit(tang, 0), 0))
+check("profile_skips_duration", lambda: eq(hit(tang, duration=True), 4))
+check(
+    "profile_skips_deflect",
+    lambda: eq(hit(tang, strength="Hitreact.Strength.Income.Deflect.Attacker"), 4),
+)
+load_profiles(**{"Blade.Override": "false"})
+check("inherit_global_without_affecting_other_groups", lambda: eq((hit(tang), hit(double)), (8, 7)))
+load_profiles(**{"ObserveOnly": "true"})
+check(
+    "observe_only_blocks_all_profile_writes",
+    lambda: eq([hit(x) for x in [tang, double, heavy, "None"]], [4, 4, 4, 4]),
+)
+check(
+    "observe_only_reason_in_log", lambda: eq("reason=observe_only" in lua.globals().TEST_LOG, True)
+)
+load_profiles(**{"Enabled": "false"})
+check(
+    "global_disable_blocks_all_profile_writes",
+    lambda: eq([hit(x) for x in [tang, double, heavy]], [4, 4, 4]),
+)
+load_profiles(**{"Blade.MaxFrames": "3"})
+check("profile_own_cap", lambda: eq((hit(tang), hit(double)), (3, 7)))
+load_profiles(**{"Blade.Mode": "add", "Blade.AddFrames": "2"})
+check("profile_add", lambda: eq(hit(tang), 6))
+load_profiles(**{"Blade.Mode": "scale", "Blade.Scale": "1.5"})
+check("profile_scale", lambda: eq(hit(tang), 6))
+load_profiles(**{"Blade.Mode": "scale", "Blade.Scale": "1", "Blade.MaxFrames": "1"})
+check("profile_identity_keeps_original", lambda: eq(hit(tang), 4))
+for idx, bad in enumerate(
+    [
+        BASE + "\nBlade.Override=true",
+        BASE + "\nUnknown.Mode=fixed",
+        BASE + "\nObserveOnly=yes",
+        configure.serialize(profile_config) + "Blade.Scale=2\n",
+        configure.serialize(profile_config).replace("Blade.FixedFrames=5", "Blade.FixedFrames=999"),
+    ]
+):
+
+    def reject_profile(bad=bad):
+        try:
+            policy.parse(bad)
+        except Exception:
+            return
+        raise AssertionError("Bad profile accepted")
+
+    check("reject_profile_" + str(idx), reject_profile)
+    lua.globals().CONFIG_RAW = bad
+    lua.globals().POLL()
+    check("bad_profile_disables_entry_" + str(idx), lambda: eq(hit(tang), 4))
+load_profiles()
+hit(heavy)
+lua.globals().POLL()
+check(
+    "status_contains_last_hit_category",
+    lambda: eq("WeaponGroup=GreatBlade" in lua.globals().TEST_LOG, True),
+)
+check(
+    "status_contains_selected_profile",
+    lambda: eq("Profile=GreatBlade" in lua.globals().TEST_LOG, True),
+)
+
 result = {
     "time": datetime.datetime.now().astimezone().isoformat(),
     "lua_version": lua.eval("_VERSION"),

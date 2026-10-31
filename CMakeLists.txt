@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(PBZHitEnhance VERSION 0.3.0 LANGUAGES CXX ASM_MASM)
+project(PBZHitEnhance VERSION 0.4.0 LANGUAGES CXX ASM_MASM)
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(FATAL_ERROR "Only Windows x64 is supported")
 endif()

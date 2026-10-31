@@ -12,14 +12,14 @@ ROOT = mod_root()
 SETTINGS = ROOT / "ui_settings.json"
 MODES = {"按比例缩放": "scale", "增加 / 减少帧数": "add", "固定帧数": "fixed"}
 REVERSE = {v: k for k, v in MODES.items()}
-DEFAULT = {
-    "Enabled": "true",
-    "Mode": "scale",
-    "Scale": "1",
-    "AddFrames": "1",
-    "FixedFrames": "5",
-    "MaxFrames": "30",
+DEFAULT = configure.defaults()
+PROFILES = {
+    "全局默认": "Global",
+    "单手刀剑": "Blade",
+    "双持武器": "DoubleBlade",
+    "双手重武器": "GreatBlade",
 }
+PROFILE_NAMES = {v: k for k, v in PROFILES.items()}
 
 
 def atomic_text(path, text):
@@ -46,6 +46,8 @@ class Panel:
         self.updating = False
         self.config_stamp = None
         self.last_status = {}
+        self.editing_profile = "Global"
+        self.value_mode = "scale"
         self.registering = False
         self.drag_origin = None
         self.root.title("影之刃零 · 卡肉调节")
@@ -124,7 +126,7 @@ class Panel:
         header.pack(fill="x")
         title = ttk.Label(header, text="影之刃零  /  HITSTOP", style="Title.TLabel")
         title.pack(side="left")
-        ttk.Label(header, text="0.3.0", style="Dim.TLabel").pack(side="left", padx=10)
+        ttk.Label(header, text="0.4 预览", style="Dim.TLabel").pack(side="left", padx=10)
         ttk.Button(header, text="隐藏", width=6, command=self.hide).pack(side="right")
         for widget in (header, title):
             widget.bind("<ButtonPress-1>", self.drag_start)
@@ -146,6 +148,30 @@ class Panel:
             variable=self.enabled,
             command=self.schedule_save,
         ).pack(anchor="w")
+        self.observe_only = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            self.main_tab,
+            text="仅记录命中，不修改帧数（验证分类）",
+            variable=self.observe_only,
+            command=self.schedule_save,
+        ).pack(anchor="w")
+        row = ttk.Frame(self.main_tab)
+        row.pack(fill="x", pady=(12, 4))
+        ttk.Label(row, text="编辑类别").pack(side="left")
+        self.profile_choice = tk.StringVar(value="全局默认")
+        selector = ttk.Combobox(
+            row, textvariable=self.profile_choice, values=list(PROFILES), state="readonly", width=25
+        )
+        selector.pack(side="right")
+        selector.bind("<<ComboboxSelected>>", self.switch_profile)
+        self.override = tk.BooleanVar(value=False)
+        self.override_control = ttk.Checkbutton(
+            self.main_tab,
+            text="此类别使用独立设置（取消则沿用全局）",
+            variable=self.override,
+            command=self.schedule_save,
+        )
+        self.override_control.pack(anchor="w", pady=(2, 0))
         ttk.Separator(self.main_tab).pack(fill="x", pady=14)
         row = ttk.Frame(self.main_tab)
         row.pack(fill="x")
@@ -197,11 +223,11 @@ class Panel:
         )
         ttk.Label(
             self.main_tab,
-            text="包含普通攻击与玩家受击；保留原始倍率和曲线。\n1 倍为原始时长。帧数使用游戏内部单位。",
+            text="按本次攻击标签分类，包含敌我双方匹配命中；未知类别沿用全局。\n保留原始倍率和曲线，帧数为游戏内部单位。",
             style="Dim.TLabel",
             wraplength=580,
         ).pack(anchor="w", pady=(10, 12))
-        ttk.Button(self.main_tab, text="恢复默认", command=self.reset).pack(anchor="w")
+        ttk.Button(self.main_tab, text="恢复当前类别默认", command=self.reset).pack(anchor="w")
         ttk.Label(self.key_tab, text="呼出 / 隐藏面板", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             self.key_tab,
@@ -302,16 +328,44 @@ class Panel:
             c = DEFAULT.copy()
             self.note.set("配置读取失败；调整任一控件可修复。" + str(exc))
         self.c = c
-        self.updating = True
-        self.enabled.set(c["Enabled"] == "true")
-        self.mode.set(REVERSE[c["Mode"]])
-        self.cap.set(c["MaxFrames"])
-        self.sync_amount()
-        self.updating = False
+        self.display_profile()
         try:
             self.config_stamp = configure.PATH.stat().st_mtime_ns
         except OSError:
             self.config_stamp = None
+
+    def prefix(self):
+        return "" if self.editing_profile == "Global" else self.editing_profile + "."
+
+    def display_profile(self):
+        self.updating = True
+        prefix = self.prefix()
+        self.enabled.set(self.c["Enabled"] == "true")
+        self.observe_only.set(self.c["ObserveOnly"] == "true")
+        self.override.set(bool(prefix) and self.c[prefix + "Override"] == "true")
+        self.override_control.configure(state="normal" if prefix else "disabled")
+        self.mode.set(REVERSE[self.c[prefix + "Mode"]])
+        self.cap.set(self.c[prefix + "MaxFrames"])
+        self.sync_amount()
+        self.updating = False
+
+    def switch_profile(self, event=None):
+        if self.save_after:
+            self.root.after_cancel(self.save_after)
+        if not self.save():
+            self.profile_choice.set(PROFILE_NAMES[self.editing_profile])
+            return
+        self.editing_profile = PROFILES[self.profile_choice.get()]
+        self.display_profile()
+        self.note.set("当前编辑：" + self.profile_choice.get() + "。未启用独立设置时沿用全局。")
+
+    def store_amount(self, c):
+        key = {"scale": "Scale", "add": "AddFrames", "fixed": "FixedFrames"}[self.value_mode]
+        c[self.prefix() + key] = (
+            str(round(self.amount.get(), 2))
+            if self.value_mode == "scale"
+            else str(int(round(self.amount.get())))
+        )
 
     def sync_amount(self):
         mode = MODES[self.mode.get()]
@@ -321,7 +375,8 @@ class Panel:
             "fixed": (0, 30, "FixedFrames"),
         }[mode]
         self.slider.configure(from_=lo, to=hi)
-        self.amount.set(float(self.c[key]))
+        self.value_mode = mode
+        self.amount.set(float(self.c[self.prefix() + key]))
         self.update_caption()
 
     def update_caption(self):
@@ -338,6 +393,7 @@ class Panel:
             self.hint.set("将符合条件的普通命中统一设为这个帧数。")
 
     def change_mode(self, event=None):
+        self.store_amount(self.c)
         self.updating = True
         self.sync_amount()
         self.updating = False
@@ -368,40 +424,39 @@ class Panel:
         try:
             c = self.c.copy()
             mode = MODES[self.mode.get()]
-            c["Mode"] = mode
+            prefix = self.prefix()
+            c[prefix + "Mode"] = mode
             c["Enabled"] = "true" if self.enabled.get() else "false"
-            key = {"scale": "Scale", "add": "AddFrames", "fixed": "FixedFrames"}[mode]
-            c[key] = (
-                str(round(self.amount.get(), 2))
-                if mode == "scale"
-                else str(int(round(self.amount.get())))
-            )
-            c["MaxFrames"] = str(int(self.cap.get()))
+            c["ObserveOnly"] = "true" if self.observe_only.get() else "false"
+            if prefix:
+                c[prefix + "Override"] = "true" if self.override.get() else "false"
+            self.store_amount(c)
+            c[prefix + "MaxFrames"] = self.cap.get().strip()
             configure.validate(c)
-            atomic_text(
-                configure.PATH,
-                "; Saved by UnifiedHitstop UI. Reloaded in game within ~1 second.\n"
-                + "\n".join(k + "=" + c[k] for k in configure.KEYS)
-                + "\n",
-            )
+            atomic_text(configure.PATH, configure.serialize(c))
             self.c = c
             self.config_stamp = configure.PATH.stat().st_mtime_ns
-            self.note.set("已保存。游戏运行时约 1 秒内生效；影响后续命中。")
+            self.note.set("已保存：" + self.profile_choice.get() + "。约 1 秒同步，影响后续命中。")
+            return True
         except Exception as exc:
             self.note.set("未保存：" + str(exc))
+            return False
 
     def reset(self):
         if self.save_after:
             self.root.after_cancel(self.save_after)
             self.save_after = None
-        atomic_text(
-            configure.PATH,
-            "; Defaults: original duration, no added tuning.\n"
-            + "\n".join(k + "=" + DEFAULT[k] for k in configure.KEYS)
-            + "\n",
-        )
-        self.reload_config()
-        self.note.set("已恢复 1 倍原始帧数。")
+        c = self.c.copy()
+        prefix = self.prefix()
+        keys = configure.PROFILE_KEYS if prefix else configure.BASE_KEYS
+        for key in keys:
+            c[prefix + key] = DEFAULT[prefix + key]
+        try:
+            atomic_text(configure.PATH, configure.serialize(c))
+            self.reload_config()
+            self.note.set("已恢复当前类别默认；其他类别和仅记录开关保持不变。")
+        except OSError as exc:
+            self.note.set("未恢复：" + str(exc))
 
     def setup_hotkey(self):
         self.show()
@@ -478,8 +533,27 @@ class Panel:
             self.connection.set(
                 "Mod 已连接 · " + ("调整开启" if s.get("Enabled") == "true" else "调整关闭")
             )
+        if (
+            age <= 8
+            and s.get("Ready") == "true"
+            and s.get("Fault") != "true"
+            and s.get("ObserveOnly") == "true"
+        ):
+            self.connection.set("Mod 已连接 · 仅记录，不修改帧数")
         self.status_text.set(
             f"最近反馈 {s['Before']} → {s['After']} 帧    已处理 {s['Seen']} 次 / 已调整 {s['Changed']} 次"
+            + "\n识别类别："
+            + PROFILE_NAMES.get(s.get("WeaponGroup"), "未知 / 未识别")
+            + "\n采用设置："
+            + PROFILE_NAMES.get(s.get("Profile"), "全局默认")
+            + "\n攻击："
+            + s.get("AttackType", "等待新版 Mod")
+            + "\n强度："
+            + s.get("Strength", "—")
+            + "\n材质："
+            + s.get("Material", "—")
+            + "\n处理结果："
+            + s.get("Reason", "—")
         )
 
     def poll(self):

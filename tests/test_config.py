@@ -32,3 +32,33 @@ class ConfigurationTests(unittest.TestCase):
     def test_shortcut_without_modifier_rejected(self):
         with self.assertRaises(ValueError):
             normalize("F10")
+
+    def test_legacy_migration_and_roundtrip(self):
+        old = "\n".join(k + "=" + configure.BASE_DEFAULT[k] for k in configure.BASE_KEYS)
+        c = configure.parse(old.replace("Scale=1", "Scale=3.09"))
+        self.assertEqual(c["Scale"], "3.09")
+        self.assertEqual(c["ObserveOnly"], "false")
+        self.assertEqual(c["Blade.Override"], "false")
+        self.assertEqual(configure.parse(configure.serialize(c)), c)
+
+    def test_profile_validation(self):
+        for patch in [
+            {"Blade.FixedFrames": "nan"},
+            {"GreatBlade.FixedFrames": "31"},
+            {"DoubleBlade.Override": "yes"},
+            {"Blade.Mode": "oops"},
+            {"ObserveOnly": "yes"},
+        ]:
+            with self.subTest(patch=patch), self.assertRaises(ValueError):
+                configure.validate(configure.defaults() | patch)
+        with self.assertRaises(ValueError):
+            configure.validate(configure.BASE_DEFAULT | {"Blade.Override": "true"})
+        with self.assertRaises(ValueError):
+            configure.parse(configure.serialize(configure.defaults()) + "Blade.Scale=2\n")
+
+    def test_profiles_preserved_by_serialization(self):
+        c = configure.defaults()
+        for profile, frames in zip(configure.PROFILES, (5, 7, 9)):
+            c[profile + ".FixedFrames"] = str(frames)
+            c[profile + ".Override"] = "true"
+        self.assertEqual(configure.parse(configure.serialize(c)), c)

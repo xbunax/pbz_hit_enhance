@@ -1,4 +1,4 @@
--- PBZ UnifiedHitstop 0.3.0. Modifies only the current feedback output's Frames field.
+-- PBZ UnifiedHitstop 0.4.0-preview.1. Modifies only the current feedback output's Frames field.
 local source=debug.getinfo(1,'S').source
 assert(source:sub(1,1)=='@','Cannot resolve UnifiedHitstop script directory')
 local scripts=assert(source:sub(2):match('^(.*[\\/])'),'Script directory missing')
@@ -12,6 +12,7 @@ local configSeen=false
 local fault=false
 local lines=0
 local seen,changed,lastBefore,lastAfter=0,0,0,0
+local lastAttack,lastGroup,lastProfile,lastStrength,lastMaterial,lastReason='None','Unknown','Global','None','None','none'
 local function log(kind,fields)
     if lines>=4000 then return end
     lines=lines+1
@@ -34,7 +35,7 @@ local function refresh()
     if ok then
         cfg=value;fault=false
         log('config_loaded',{{'enabled',cfg.Enabled},{'mode',cfg.Mode},{'scale',cfg.Scale},
-            {'add_frames',cfg.AddFrames},{'fixed_frames',cfg.FixedFrames},{'max_frames',cfg.MaxFrames}})
+            {'observe_only',cfg.ObserveOnly},{'add_frames',cfg.AddFrames},{'fixed_frames',cfg.FixedFrames},{'max_frames',cfg.MaxFrames}})
     else
         cfg=nil
         log('config_invalid_disabled',{{'error',value}})
@@ -45,11 +46,15 @@ local function onFeedback(context,attackType,strength,material,particles,param,c
     local ok,err=pcall(function()
         local strengthName=strength:get().TagName:ToString()
         local data=param:get()
-        local before,after,reason=policy.apply(data,strengthName,cfg)
+        local attackName=safe(function() return attackType:get().TagName:ToString() end)
+        local materialName=safe(function() return material:get().TagName:ToString() end)
+        local effective,group,profile=policy.select(cfg,attackName)
+        local before,after,reason=policy.apply(data,strengthName,effective)
+        lastAttack,lastGroup,lastProfile,lastStrength,lastMaterial,lastReason=attackName,group,profile,strengthName,materialName,reason
         seen=seen+1;lastBefore=before;lastAfter=after
         if before~=after then changed=changed+1 end
-        log('feedback',{{'attack_type',safe(function() return attackType:get().TagName:ToString() end)},
-            {'strength',strengthName},{'material',safe(function() return material:get().TagName:ToString() end)},
+        log('feedback',{{'attack_type',attackName},{'group',group},{'profile',profile},
+            {'strength',strengthName},{'material',materialName},
             {'before',before},{'after',after},{'reason',reason},{'multiplier',data.Multiplier},
             {'curve',safe(function() return data.SlomoCurve:GetFullName() end)}})
     end)
@@ -72,6 +77,7 @@ local function onConsumer(context,runtime,id,param)
     if not ok then log('consumer_read_error',{{'error',err}}) end
 end
 local specs={{path=FEEDBACK,fn=onFeedback},{path=CONSUMER,fn=onConsumer}}
+local function statusValue(value) return tostring(value):gsub('[\r\n=]',' ') end
 local function writeStatus()
     local ready=true
     for _,s in ipairs(specs) do if not s.ids then ready=false end end
@@ -79,7 +85,9 @@ local function writeStatus()
     if not f then return end
     f:write('Timestamp='..os.time()..'\nReady='..tostring(ready)..'\nFault='..tostring(fault)..
         '\nEnabled='..tostring(cfg~=nil and cfg.Enabled)..'\nSeen='..seen..'\nChanged='..changed..
-        '\nBefore='..lastBefore..'\nAfter='..lastAfter..'\n')
+        '\nBefore='..lastBefore..'\nAfter='..lastAfter..'\nObserveOnly='..tostring(cfg~=nil and cfg.ObserveOnly)..
+        '\nAttackType='..statusValue(lastAttack)..'\nWeaponGroup='..lastGroup..'\nProfile='..lastProfile..
+        '\nStrength='..statusValue(lastStrength)..'\nMaterial='..statusValue(lastMaterial)..'\nReason='..lastReason..'\n')
     f:close()
 end
 local attempts=0
@@ -106,6 +114,6 @@ local function dispatch()
     end)
     if not ok then queued=false;log('dispatch_error',{{'error',err}}) end
 end
-log('mod_loaded',{{'version','0.3.0'},{'scope','all_normal_feedback_including_player_received'},{'log_limit',4000}})
+log('mod_loaded',{{'version','0.4.0-preview.1'},{'scope','all_normal_feedback_including_player_received'},{'log_limit',4000}})
 dispatch()
 LoopAsync(1000,function() dispatch();return false end)

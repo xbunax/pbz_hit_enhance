@@ -53,11 +53,45 @@ SlitheringSword 另支持配置中存在的 Slap 挥击类型；其他武器不�
 
 不要下载 Source code 当作安装包，也不要同时安装两种运行库。使用 SHA256SUMS.txt 核对下载文件。用户无需安装 Python、Visual Studio 或 ReShade。
 
-两种包都提供 Install.ps1，安装前必须退出游戏。脚本验证游戏、安装包和已知旧版加载器，保留配置和快捷键并备份迁移文件。建议显式传入外置 DataDirectory；本机开发与测试均使用 D:\Game_mod，避免把临时文件放入 Steam。
+### mod-only：已有 UE4SS 的用户
 
-整合包在真实 `platform\steam\PBZ.exe` 旁安装本项目的 dwmapi.dll 与路径配置，运行库及 Mod 放在指定数据版本目录。仅 Mod 包复用选定 UE4SS，在它的 Mods 目录创建本项目的目录联接，只更新 `UnifiedHitstop` 启用项，不覆盖公共设置或签名。多个候选 Mods 目录必须明确指定。
+1. 确认现有 UE4SS 能正常随游戏启动，然后完全退出游戏和调节面板。
+2. 解压名称包含 `mod-only` 的安装包。
+3. 将包内整个 **`UnifiedHitstop` 文件夹**复制到现有 UE4SS 实际使用的 **`Mods` 文件夹**，与其他 UE4SS Mod 放在一起：
 
-旧版六项配置及 0.4 分类配置和快捷键可迁移。更新前备份；回退旧脚本时恢复其对应配置。卸载使用本次安装记录，只停用本 Mod；数据和共享 UE4SS 保留。
+   ```text
+   Mods/
+   ├─ 其他Mod/
+   ├─ UnifiedHitstop/
+   │  ├─ Scripts/
+   │  ├─ panel/
+   │  ├─ config.ini
+   │  ├─ dependencies.json
+   │  └─ install-mode.txt
+   └─ mods.txt
+   ```
+
+4. 在该 UE4SS 实际使用的 `mods.txt` 中添加或修改下面这一项，保留其他 Mod 的条目：
+
+   ```text
+   UnifiedHitstop : 1
+   ```
+
+5. 正常启动游戏。首次启动时设置面板快捷键，以后面板随游戏自动启动和关闭。
+
+以上操作无需填写固定安装路径。使用自定义 Mods 目录或统一控制列表时，以现有 UE4SS 配置指定的目录和 `mods.txt` 为准；可参考其他已正常加载的 Mod 所在位置。
+
+**升级：**退出游戏，备份原 `UnifiedHitstop` 中的 `config.ini` 和 `ui_settings.json`（若存在），替换新版文件夹后恢复这两个文件，以保留武器设置和快捷键。
+
+**卸载手动安装：**退出游戏，备份配置，将 `UnifiedHitstop` 文件夹移出 Mods 目录，并移除或禁用 `mods.txt` 中的对应条目。共享 UE4SS 和其他 Mod 保留。
+
+**此前使用整合包：**先停用旧整合包加载器，确认独立 UE4SS 已能正常启动，再安装仅 Mod 包，避免两套运行库同时加载。不要根据文件名随意删除其他 Mod 的代理 DLL。旧版迁移或外置数据需求，可使用包内 `Install.ps1`，具体参数见[仅 Mod 包安装说明](docs/INSTALL_mod-only.md)。
+
+### with-UE4SS：尚未安装 UE4SS 的用户
+
+使用整合包内的 `Install.ps1`，按自己的游戏目录和数据目录安装，步骤见[整合包安装说明](docs/INSTALL_with-UE4SS.md)。安装前退出游戏；脚本会校验游戏和安装包、保留配置和快捷键，并备份迁移文件。
+
+整合包在真实 `platform\steam\PBZ.exe` 旁安装本项目的加载器与路径配置，运行库和 Mod 放在指定的数据版本目录。通过脚本安装的用户，使用该次生成的安装记录执行 `Uninstall.ps1`。回退旧脚本时恢复其对应配置备份。
 
 ## 使用
 

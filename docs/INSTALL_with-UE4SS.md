@@ -1,16 +1,47 @@
-# 带 UE4SS 整合包安装
+# 带 UE4SS 整合包：手动安装
 
-适用于尚未安装 UE4SS 的用户。已存在 UE4SS、override.txt 或其他 dwmapi.dll 时，改用同一 Release 的 mod-only 包。
+适用于尚未安装 UE4SS 的用户。通过复制文件夹安装，无需运行安装脚本或填写固定磁盘路径。若已有独立 UE4SS、override.txt 或其他来源的 dwmapi.dll，应使用同一 Release 的 mod-only 包，保留现有加载器。
 
-1. 退出游戏和旧调节面板，解压本包到单独目录。
-2. 打开 PowerShell，执行下列命令；将尖括号内的文字连同尖括号一起替换为自己的真实游戏目录和数据目录：
+## 安装步骤
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -GameDirectory "<包含真实PBZ.exe的游戏目录>" -DataDirectory "<用于存放本Mod数据和备份的目录>"
-```
+1. 完全退出游戏和调节面板，下载并解压名称包含 `with-UE4SS` 的 ZIP。
+2. 在 Steam 中右键《影之刃零》→“管理”→“浏览本地文件”，进入 `platform\steam`，确认该目录内有真实的 `PBZ.exe`。
+3. 将压缩包内的 **`dwmapi.dll` 和整个 `PBZHitEnhance` 文件夹**复制到这个 `PBZ.exe` 旁，保持文件夹结构：
 
-安装程序校验包和游戏版本，备份本项目的旧加载器及配置，将匹配的运行库、脚本和面板安装到版本目录，并写入 PBZHitEnhance.ini。其他项目的代理 DLL 不会被覆盖。
+   ```text
+   platform/steam/
+   ├─ PBZ.exe
+   ├─ dwmapi.dll
+   └─ PBZHitEnhance/
+      └─ ue4ss/
+         ├─ UE4SS.dll
+         └─ Mods/
+            ├─ mods.txt
+            └─ UnifiedHitstop/
+               ├─ Scripts/
+               ├─ panel/
+               └─ config.ini
+   ```
 
-以后正常从 Steam 启动。首次配置快捷键；游戏退出或崩溃后面板自动结束。游戏未运行时手动打开面板会提示并退出。
+4. 正常从 Steam 启动游戏。首次启动设置面板快捷键，以后面板随游戏自动启动和关闭。
 
-卸载：先退出游戏，再运行 `Uninstall.ps1 -InstallRecord "<本次生成的install-record.json文件>"`。保留配置及备份，不会自动重新启用旧版。
+整合包已包含匹配的运行库、脚本和独立面板。完整复制 `PBZHitEnhance` 文件夹，不要只复制 DLL、Lua 文件或面板程序。图中仅列出主要文件，其余包内文件应保持完整。
+
+加载器默认读取 `dwmapi.dll` 旁的 `PBZHitEnhance` 文件夹。新安装按上述结构放置即可，不需要创建 `PBZHitEnhance.ini`。
+
+## 更新或从旧版迁移
+
+1. 完全退出游戏和调节面板。
+2. 找到旧安装实际使用的 `UnifiedHitstop` 文件夹，备份其中的 `config.ini` 和 `ui_settings.json`（若存在），保留武器设置和快捷键。默认位于 `PBZHitEnhance\ue4ss\Mods\UnifiedHitstop`。
+3. 如果游戏目录中已有本项目的 `PBZHitEnhance.ini`，先查看它的 `DataDirectory`；旧配置可能位于该外置目录。完成备份后，把这个 INI 文件移出游戏目录，避免它继续指向旧版本。
+4. 备份本项目旧版的 `dwmapi.dll` 和 `PBZHitEnhance` 文件夹，再按上方步骤放入新版。
+5. 将备份的 `config.ini` 和 `ui_settings.json` 恢复到新版 `PBZHitEnhance\ue4ss\Mods\UnifiedHitstop`。
+6. 正常启动游戏，检查面板能否呼出及设置是否保留。
+
+不要根据文件名覆盖其他 Mod 的代理 DLL。只有确认原文件属于本整合包时才替换；已有其他 UE4SS 安装时使用 mod-only 方式。
+
+## 手动卸载
+
+退出游戏和调节面板，将自己从本整合包复制的 `dwmapi.dll` 移出游戏目录，停止自动加载。`PBZHitEnhance` 文件夹可备份后移出，以保留个人设置。若曾设置本项目的 `PBZHitEnhance.ini`，也将其备份并移出。
+
+该方式只处理本整合包文件，不删除共享 UE4SS 或其他 Mod。游戏正在运行时，移除文件不会卸载已经加载的代码，需要重新启动游戏才能生效。

@@ -89,9 +89,32 @@ SlitheringSword 另支持配置中存在的 Slap 挥击类型；其他武器不�
 
 ### with-UE4SS：尚未安装 UE4SS 的用户
 
-使用整合包内的 `Install.ps1`，按自己的游戏目录和数据目录安装，步骤见[整合包安装说明](docs/INSTALL_with-UE4SS.md)。安装前退出游戏；脚本会校验游戏和安装包、保留配置和快捷键，并备份迁移文件。
+1. 完全退出游戏和调节面板，下载并解压名称包含 `with-UE4SS` 的 ZIP。
+2. 在 Steam 中右键《影之刃零》→“管理”→“浏览本地文件”，进入 `platform\steam`，确认该目录内有真实的 `PBZ.exe`。
+3. 将压缩包内的 **`dwmapi.dll` 和整个 `PBZHitEnhance` 文件夹**复制到这个 `PBZ.exe` 旁，保持文件夹结构：
 
-整合包在真实 `platform\steam\PBZ.exe` 旁安装本项目的加载器与路径配置，运行库和 Mod 放在指定的数据版本目录。通过脚本安装的用户，使用该次生成的安装记录执行 `Uninstall.ps1`。回退旧脚本时恢复其对应配置备份。
+   ```text
+   platform/steam/
+   ├─ PBZ.exe
+   ├─ dwmapi.dll
+   └─ PBZHitEnhance/
+      └─ ue4ss/
+         ├─ UE4SS.dll
+         └─ Mods/
+            ├─ mods.txt
+            └─ UnifiedHitstop/
+               ├─ Scripts/
+               ├─ panel/
+               └─ config.ini
+   ```
+
+4. 正常从 Steam 启动游戏。首次启动设置面板快捷键，以后面板随游戏自动启动和关闭。
+
+安装只需复制上述 DLL 和文件夹，具体步骤见[整合包手动安装说明](docs/INSTALL_with-UE4SS.md)。如果目标位置已存在其他来源的 `dwmapi.dll` 或已有独立 UE4SS，不要覆盖，改用 `mod-only` 包。
+
+**升级与旧安装迁移：**先备份原 `UnifiedHitstop` 中的 `config.ini` 和 `ui_settings.json`，替换后恢复。若游戏目录已有本项目的 `PBZHitEnhance.ini`，它可能仍指向旧的外置数据目录；使用上述默认手动布局时，将该文件备份并移出游戏目录，使加载器读取旁边的新版 `PBZHitEnhance` 文件夹。原配置若在外置目录，应先从那里备份。
+
+**卸载手动安装：**退出游戏和面板，将本整合包安装的 `dwmapi.dll` 移出游戏目录，即可停止自动加载。`PBZHitEnhance` 文件夹可备份后移出，以保留设置。只处理自己从本包复制的文件。
 
 ## 使用
 

@@ -4,6 +4,12 @@
 
 通过共享命中反馈入口调整卡肉帧数，提供中文调节面板、快捷键呼出和随游戏启动自动加载。可以按原帧数缩放、增加/减少帧数，或固定帧数。默认 **1 倍**，保留游戏原始时长。
 
+## 0.4.0-preview.2 生命周期与兼容修复
+
+面板随真实游戏进程启动，并在游戏退出或崩溃后自动结束。仅打开面板不会启动游戏；没有游戏时提示后退出。进程绑定使用完整路径、PID 和创建时间，暂停、切换地图或日志停止更新不会触发退出。
+
+同一个 Release 提供 `with-UE4SS` 整合包与 `mod-only` 仅 Mod 包，分别适用于尚未安装和已经安装 UE4SS 的用户。仅 Mod 包包含本项目的面板启动组件，不包含 UE4SS 或游戏根目录代理。外部运行库先做接口能力检查，未知版本会明确标记，失败时停用本 Mod。
+
 ## 分武器类别设置（0.4 预览）
 
 “卡肉设置”新增“编辑类别”：全局默认、单手刀剑、双持武器、双手重武器。各类别可以单独选择倍率、增减帧数或固定帧数，并设置自己的上限。勾选“此类别使用独立设置”后覆盖全局；取消后沿用全局。总开关关闭会停止所有类别的调整。恢复默认只重置当前编辑类别。
@@ -36,50 +42,22 @@ SlitheringSword 另支持配置中存在的 Slap 挥击类型；其他武器不�
 
 扩展验证顺序：对新武器先开仅记录模式，核对标签与类别，再以独立固定帧数检查下游输出。本次已完成三件武器的固定帧数测试；后续已验证单手 3 倍（32 次）、4 倍（6 次）及双持 3/4 倍（9 次）的下游帧数匹配；本轮尚未实测总开关关闭后的恢复，该行为已有离线回归覆盖。离线测试不代替实战。
 
-## 下载
+## 下载与安装
 
-打开 [Releases](https://github.com/xbunax/pbz_hit_enhance/releases)，选择 **v0.4.0-preview.1（预览版）**，下载 `PBZHitEnhance-v版本号-windows-x64.zip`。不要下载 GitHub 自动生成的 Source code 压缩包用于安装。
+打开 [Releases](https://github.com/xbunax/pbz_hit_enhance/releases)，选择同一版本下适合自己的包：
 
-发布包由 GitHub Actions 编译，包含加载 DLL、匹配的 UE4SS 运行库和独立面板程序，使用者无需安装 Python、Visual Studio 或 ReShade。
+| 包名后缀 | 适用场景 | 安装说明 |
+| --- | --- | --- |
+| with-UE4SS-windows-x64.zip | 尚未安装 UE4SS | [整合包安装](docs/INSTALL_with-UE4SS.md) |
+| mod-only-windows-x64.zip | 已有正常工作的 UE4SS | [仅 Mod 包安装](docs/INSTALL_mod-only.md) |
 
-## 安装
+不要下载 Source code 当作安装包，也不要同时安装两种运行库。使用 SHA256SUMS.txt 核对下载文件。用户无需安装 Python、Visual Studio 或 ReShade。
 
-1. **完全退出游戏。**
-2. 在 Steam 中右键《影之刃零》→ 管理 → 浏览本地文件。
-3. 进入 `platform\steam` 文件夹，确认这里有体积约 487 MiB 的真实 `PBZ.exe`。本项目验证的路径为 `…\steamapps\common\PBZ\platform\steam\PBZ.exe`。
-4. 解压 Release，把 `dwmapi.dll` 和整个 `PBZHitEnhance` 文件夹复制到这个 `PBZ.exe` 旁。保留文件夹结构。
-5. 正常从 Steam 启动游戏。首次启动会打开快捷键设置，点击“点击录入按键”，按住所需单键或同时按住组合键，全部松开后点击“保存快捷键”。以后面板在后台启动，使用保存的快捷键呼出或隐藏。
+两种包都提供 Install.ps1，安装前必须退出游戏。脚本验证游戏、安装包和已知旧版加载器，保留配置和快捷键并备份迁移文件。建议显式传入外置 DataDirectory；本机开发与测试均使用 D:\Game_mod，避免把临时文件放入 Steam。
 
-安装后结构如下：
+整合包在真实 `platform\steam\PBZ.exe` 旁安装本项目的 dwmapi.dll 与路径配置，运行库及 Mod 放在指定数据版本目录。仅 Mod 包复用选定 UE4SS，在它的 Mods 目录创建本项目的目录联接，只更新 `UnifiedHitstop` 启用项，不覆盖公共设置或签名。多个候选 Mods 目录必须明确指定。
 
-```text
-PBZ/platform/steam/
-├─ PBZ.exe
-├─ dwmapi.dll                    ← 自动加载器
-└─ PBZHitEnhance/                ← 必须保留的运行数据
-   ├─ panel/HitstopPanel.exe
-   ├─ ue4ss/
-   │  ├─ UE4SS.dll
-   │  ├─ UE4SS-settings.ini
-   │  └─ Mods/UnifiedHitstop/
-   │     ├─ Scripts/
-   │     └─ config.ini
-   ├─ logs/
-   └─ temp/
-```
-
-**如果目录已经有其他来源的 `dwmapi.dll`，请先确认它属于哪个 Mod，不要直接覆盖。** 本项目没有配置与其他 DLL 代理的串联加载。
-
-### 把运行数据放在游戏目录之外
-
-也可以只把 `dwmapi.dll` 放在真实 `PBZ.exe` 旁，把完整 `PBZHitEnhance` 文件夹移到例如 `D:\Game_mod\PBZHitEnhance`，再在 DLL 旁新建 `PBZHitEnhance.ini`：
-
-```ini
-[Paths]
-DataDirectory=D:\Game_mod\PBZHitEnhance
-```
-
-路径指向含有 `panel` 和 `ue4ss` 子目录的文件夹。外置方式下，配置、日志和面板临时文件也写在该文件夹中。移动数据目录后，应在游戏退出时更新上述路径。
+旧版六项配置及 0.4 分类配置和快捷键可迁移。更新前备份；回退旧脚本时恢复其对应配置。卸载使用本次安装记录，只停用本 Mod；数据和共享 UE4SS 保留。
 
 ## 使用
 
@@ -98,7 +76,7 @@ DataDirectory=D:\Game_mod\PBZHitEnhance
 
 本版只写当次命中反馈的 `Frames`，保留倍率和曲线。作用于经过共享入口的普通命中，**包含玩家受击**；跳过原本零帧、格挡、其他特殊标签和按持续时间计时的反馈。帧数是游戏内部单位，尚未换算成现实毫秒。日志证明参数传入执行接口，不能代替实际停顿时长测量。本版尚无独立“停顿强度”调节；增加帧数不会同时降低原始减速倍率或改变恢复曲线，因此主观打击感不一定按相同比例增强。未验证所有武器。
 
-隐藏或退出面板不会停止已经加载的 Mod。面板是独立后台程序，游戏退出后仍可呼出，可在“运行状态”页退出调节器。若需要手动打开，可运行 `PBZHitEnhance\panel\HitstopPanel.exe`。
+隐藏或手动退出面板不会卸载当前游戏中已经加载的 Mod；游戏结束后面板自动结束。面板程序位于 UnifiedHitstop\panel\HitstopPanel.exe，游戏未运行时双击会提示后退出。
 
 ## 兼容版本
 
@@ -112,13 +90,9 @@ DataDirectory=D:\Game_mod\PBZHitEnhance
 
 ## 更新和卸载
 
-更新前退出游戏，并在面板“运行状态”页退出调节器。备份 `ue4ss\Mods\UnifiedHitstop\config.ini` 和 `ui_settings.json`（若存在），替换本项目的 DLL 与数据文件夹后恢复这两份设置。不要保留旧运行库混用，也不要覆盖其他 Mod 的 DLL。
+退出游戏后按对应安装说明运行安装脚本。安装记录保存在 DataDirectory\install-record.json，备份在 DataDirectory\backups。卸载时向 Uninstall.ps1 传入 -InstallRecord 指向该记录；它校验文件所有权后停用本项目，保留配置、共享 UE4SS 及其他 Mod。回滚需使用备份，卸载不会自动重新启用旧版。
 
-卸载时先退出游戏和面板，再移除本项目的 `dwmapi.dll`。之后正常启动游戏便不会加载本 Mod。`PBZHitEnhance` 文件夹可以保留以保存设置；使用外置方式时也可保留 `PBZHitEnhance.ini`。
-
-压缩包中的 `Uninstall.ps1` 可放在 DLL 旁执行，会在校验 DLL 确实属于本包后将其移除，保留数据目录。
-
-临时跳过加载：在数据文件夹创建 `disabled.flag`，或给游戏添加启动参数 `--disable-unified-hitstop`。移除标记/参数后，下次启动重新启用。
+整合模式可用根数据目录 disabled.flag 跳过加载；两种模式都支持在 UnifiedHitstop 目录创建 disabled.flag 或使用游戏启动参数 --disable-unified-hitstop，下次启动生效。
 
 ## 常见问题
 
@@ -126,7 +100,7 @@ DataDirectory=D:\Game_mod\PBZHitEnhance
 - **显示未连接**：检查 DLL 是否放在真实 `platform\steam\PBZ.exe` 旁，文件夹结构是否完整，并等待游戏进入场景。
 - **游戏更新后失效**：查看 `PBZHitEnhance\logs\loader.log`，若出现 `unsupported_game_skipped`，需等待兼容更新。
 - **找不到运行库或校验失败**：重新解压完整 Release；不要只复制 DLL。检查外置数据路径是否正确。
-- **需要日志**：加载日志在数据目录的 `logs\loader.log`；UE4SS 日志在 `ue4ss\UE4SS.log`；反馈日志和状态在 `ue4ss\Mods\UnifiedHitstop`。
+- **需要日志**：整合加载日志在数据目录的 `logs\loader.log`；面板启动信息在 Mod 目录的 `bootstrap.ini`，兼容故障在 `startup.log`；反馈日志和状态也在 Mod 目录。共享 UE4SS 日志仍由原运行库管理。
 
 ## 从源码构建
 

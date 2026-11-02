@@ -135,12 +135,16 @@ lua.globals().CONFIG_RAW = BASE.replace("Mode=scale", "Mode=add")
 lua.execute("""
 TEST_LOG='';HOOKS={};POLL=nil
 io.open=function(path,mode)
+ if path:match('bootstrap.ini$') then return {read=function() return '[Session]\\nAllowed=true\\n' end,close=function() end} end
  if path:match('config.ini$') then
   if CONFIG_RAW==nil then return nil end
   return {read=function() return CONFIG_RAW end,close=function() end}
  end
  return {write=function(_,s) TEST_LOG=TEST_LOG..s end,close=function() end}
 end
+package.loadlib=function() return function() end end
+UnregisterHook=function(path) HOOKS[path]=nil end
+StaticFindObject=function() return {IsValid=function() return true end} end
 RegisterHook=function(path,fn) HOOKS[path]=fn;return 1,2 end
 ExecuteInGameThread=function(fn) fn() end
 LoopAsync=function(_,fn) POLL=fn end

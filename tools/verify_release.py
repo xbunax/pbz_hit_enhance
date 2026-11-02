@@ -58,34 +58,67 @@ def verify_native(dll):
     print("Native export forwarding and host guard passed")
 
 
-def main():
-    package = Path(sys.argv[1]).resolve()
-    data = package / "PBZHitEnhance"
-    manifest = json.loads((data / "package_manifest.json").read_text())
+def verify_package(package):
+    metadata = json.loads((package / "package.json").read_text())
+    mode = metadata["mode"]
+    assert mode in ("with-UE4SS", "mod-only"), mode
+    manifest = json.loads((package / "package_manifest.json").read_text())
+    actual = {p.relative_to(package).as_posix() for p in package.rglob("*") if p.is_file()}
+    assert actual == set(manifest) | {"package_manifest.json"}, "Unlisted package files"
     for name, expected in manifest.items():
-        path = package / name
-        assert path.is_file(), name
+        path = (package / name).resolve()
+        assert path.is_relative_to(package) and path.is_file(), name
         assert hashlib.sha256(path.read_bytes()).hexdigest() == expected, name
-    assert not list(package.rglob("ui_settings.json")), "Personal hotkey preferences must not ship"
-    assert not list(package.rglob("runtime.log")), "Live logs must not ship"
-    verify_native(package / "dwmapi.dll")
-    output = ROOT / "build/panel-self-test.json"
-    panel = data / "panel/HitstopPanel.exe"
+    assert not any(package.rglob("ui_settings.json")), "Personal preferences must not ship"
+    for name in (
+        "runtime.log",
+        "status.ini",
+        "bootstrap.ini",
+        "startup.log",
+        "pbz_job_fixture.exe",
+    ):
+        assert not any(package.rglob(name)), name
+    if mode == "with-UE4SS":
+        mod = package / "PBZHitEnhance/ue4ss/Mods/UnifiedHitstop"
+        dependency = json.loads((ROOT / "dependencies.json").read_text())["ue4ss"]
+        runtime = package / "PBZHitEnhance/ue4ss/UE4SS.dll"
+        assert hashlib.sha256(runtime.read_bytes()).hexdigest() == dependency["dll_sha256"]
+        verify_native(package / "dwmapi.dll")
+    else:
+        mod = package / "UnifiedHitstop"
+        for name in ("UE4SS.dll", "dwmapi.dll", "UE4SS-settings.ini", "MemberVariableLayout.ini"):
+            assert not any(package.rglob(name)), "Runtime leaked into mod-only: " + name
+        assert not (package / "PBZHitEnhance").exists()
+    assert (mod / "Scripts/PBZBootstrap.dll").is_file()
+    assert (mod / "dependencies.json").is_file()
+    assert (mod / "install-mode.txt").read_text().strip() == mode
+    library = C.WinDLL(str((mod / "Scripts/PBZBootstrap.dll").resolve()))
+    # Resolve only: invoking the entry point belongs to the live-game smoke test.
+    assert library.luaopen_pbz_bootstrap
+    output = ROOT / ("build/panel-self-test-" + mode + ".json")
     completed = subprocess.run(
-        [
-            str(panel),
-            "--self-test",
-            str(output),
-            "--mod-dir",
-            str(data / "ue4ss/Mods/UnifiedHitstop"),
-        ],
+        [str(mod / "panel/HitstopPanel.exe"), "--self-test", str(output), "--mod-dir", str(mod)],
         check=False,
         timeout=60,
     )
     report = json.loads(output.read_text(encoding="utf-8"))
     assert completed.returncode == 0, report
     assert report["config_valid"] and report["hotkey_valid"] and report["tk_window_created"]
-    print("Packaged panel and all file checksums passed")
+    print(mode + ": checksums, distribution boundaries and frozen panel passed")
+
+
+def main():
+    base = Path(sys.argv[1]).resolve()
+    if (base / "package.json").is_file():
+        verify_package(base)
+    else:
+        for mode in ("with-UE4SS", "mod-only"):
+            verify_package(base / mode)
+        sums = (ROOT / "dist/SHA256SUMS.txt").read_text().splitlines()
+        assert len(sums) == 2
+        for line in sums:
+            checksum, name = line.split()
+            assert hashlib.sha256((ROOT / "dist" / name).read_bytes()).hexdigest() == checksum
 
 
 if __name__ == "__main__":

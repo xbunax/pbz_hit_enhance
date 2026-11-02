@@ -27,20 +27,29 @@ def pressed_keys():
 
 
 class SingleInstance:
-    def __init__(self, notify=True):
-        self.mutex = k.CreateMutexW(None, False, r"Local\PBZ_UnifiedHitstop_UI_v01")
+    def __init__(self, notify=True, token="legacy"):
+        self.mutex = k.CreateMutexW(None, False, "Local\\PBZ_UnifiedHitstop_UI_v02_" + token)
         if not self.mutex:
             raise C.WinError(C.get_last_error())
         self.existing = C.get_last_error() == 183
-        self.event = k.CreateEventW(None, False, False, r"Local\PBZ_UnifiedHitstop_Show_v01")
+        self.event = k.CreateEventW(
+            None, False, False, "Local\\PBZ_UnifiedHitstop_Show_v02_" + token
+        )
         if not self.event:
-            raise C.WinError(C.get_last_error())
+            error = C.WinError(C.get_last_error())
+            k.CloseHandle(self.mutex)
+            self.mutex = None
+            raise error
         if self.existing and notify:
             k.SetEvent(self.event)
 
     def close(self):
-        k.CloseHandle(self.event)
-        k.CloseHandle(self.mutex)
+        if self.event:
+            k.CloseHandle(self.event)
+            self.event = None
+        if self.mutex:
+            k.CloseHandle(self.mutex)
+            self.mutex = None
 
 
 class HotkeyWorker(threading.Thread):

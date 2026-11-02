@@ -15,5 +15,8 @@ def mod_root():
     if os.environ.get("PBZ_HITSTOP_MOD_DIR"):
         return Path(os.environ["PBZ_HITSTOP_MOD_DIR"]).resolve()
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent.parent / "ue4ss" / "Mods" / "UnifiedHitstop"
+        folder = Path(sys.executable).resolve().parent.parent
+        if (folder / "Scripts").is_dir():
+            return folder
+        return folder / "ue4ss" / "Mods" / "UnifiedHitstop"
     return Path(__file__).resolve().parents[1] / "mod" / "UnifiedHitstop"

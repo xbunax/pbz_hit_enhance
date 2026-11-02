@@ -4,7 +4,7 @@
 
 `dwmapi.dll` 为 x64 系统代理。导出表来自已检查的 dwmapi 导出清单，MASM 桩直接跳转到系统 DLL 的真实地址。转发在 DllMain 中准备；版本校验、加载 UE4SS 和启动面板由后台线程执行。
 
-后台只处理文件名为 PBZ.exe 且 SHA256 匹配的进程。默认从 DLL 旁的 PBZHitEnhance 查找数据；可由 PBZHitEnhance.ini 的 Paths/DataDirectory 覆盖。运行库校验通过后加载 ue4ss/UE4SS.dll，再启动独立面板程序并传入 --mod-dir。不会注册服务或系统开机启动项。
+后台只处理文件名为 PBZ.exe 且 SHA256 匹配的进程。默认从 DLL 旁的 PBZHitEnhance 查找数据；可由 PBZHitEnhance.ini 的 Paths/DataDirectory 覆盖。运行库校验通过后仅加载 ue4ss/UE4SS.dll。Mod 的 Lua 入口通过 PBZBootstrap.dll 启动面板，传入 --mod-dir 和真实游戏的 PID、创建时间与路径。不会注册服务或系统开机启动项。
 
 `PBZHitEnhanceStatus` 为测试导出：2 表示非游戏进程被跳过；发布检查在 Python 测试宿主中验证不会加载 UE4SS。
 
@@ -18,7 +18,7 @@ policy.lua 负责配置解析、作用范围与帧数计算。仅处理 Hitreact
 
 ## 面板
 
-Python/Tk 源码由 PyInstaller 生成包含解释器和 Tk 的独立目录包；用户不需要安装 Python。全局快捷键由 RegisterHotKey 工作线程处理，Tk 主线程负责显示和原子保存配置。已设置快捷键时，自动启动模式默认隐藏。
+Python/Tk 源码由 PyInstaller 生成包含解释器和 Tk 的独立目录包；用户不需要安装 Python。全局快捷键由当前按键状态采样工作线程处理，Tk 主线程负责显示和原子保存配置。已设置快捷键时，自动启动模式默认隐藏。
 
 配置不作为 Lua 执行，只接受白名单键与合法数值。后台按约一秒周期在游戏线程应用新配置。UI 与脚本通过配置和状态文件通信，不进行外部进程内存写入。
 
@@ -55,3 +55,13 @@ DT_WeaponData 中 WeaponType 枚举值 1/2/3 对应 Blade/DoubleBlade/GreatBlade
 快捷键保存在 ui_settings.json，以规范化键名表示，兼容旧 CTRL+F10。后台线程使用 GetAsyncKeyState 的当前按下状态位，录入时暂时停止触发，按键全部松开后提供待保存组合；取消、失焦和超时保留旧配置。匹配支持常规键盘单键与多个普通键，左右修饰键等价。
 
 仅采样支持绑定的常规键盘键，不扫描保留 VK 或媒体设备状态。已复现本机媒体播放/暂停键持续置位；旧“全键集合完全相等”逻辑因此阻断 Ctrl+F10。现匹配要求绑定键全部按下且修饰键集合准确，无关普通键不阻断；完整松开绑定键后才能再次触发。原始按键状态不写入日志，仅保存用户确认的快捷键。该机制不拦截游戏输入，也不覆盖 Windows 系统保留行为。
+
+## 0.4.0-preview.2：进程会话与双发行包
+
+面板使用 SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION 打开游戏句柄，核对路径、PID 和 FILETIME 创建时间，每 250 ms 检查进程是否结束；不根据 Lua 心跳判断游戏退出。自动启动面板还由游戏持有的 KILL_ON_JOB_CLOSE Job 管理，子进程以挂起状态创建，加入 Job 后才恢复，且不继承 Job 句柄。面板自己监听进程退出作为另一条清理路径。真实 HWND/Tk 测试与原生生产启动函数测试分别验证正常及强制退出。
+
+PBZBootstrap 以 lua_CFunction 形式导出零参数启动入口，不读取 Lua 栈或导入 Lua/UE4SS SDK 符号；通过自身路径解析 Mod 的规范化目录。它校验游戏版本、读取实际已加载 UE4SS、建立游戏会话级所有者互斥，再启动面板。不同 Mod 副本的重复实例被拒绝；同一脚本被 UE4SS 正常重载时使用已初始化的本组件。允许状态、运行库路径与哈希写入 bootstrap.ini，启动故障另记 startup.log。status.ini 带会话身份，面板不把上一轮游戏的状态当成新会话。
+
+整合包使用自有代理和锁定运行库；发现外部 UE4SS、override.txt 或 --ue4ss-path 时停止自带加载。仅 Mod 包不含根目录代理、UE4SS.dll、公共设置或签名，复用用户现有运行库。Lua 检测接口后再初始化；对象尚未加载时等待，已找到对象而 Hook 失败时撤销本 Mod 已注册的 Hook 并保持停用。未知外部版本允许尝试，不等同于已验证兼容。
+
+安装器把数据放在版本目录，兼容模式通过 Mods 目录中的联接引用外部数据。仅替换自身启用条目，失败回滚联接、加载器、路径配置和启用列表。安装及卸载测试使用隔离假游戏文件验证，不依赖真正游戏，也不在测试中执行假游戏。完整回归还覆盖旧配置迁移、篡改包拒绝、其他代理保护和只读控制列表造成的失败恢复。

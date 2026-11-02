@@ -3,7 +3,8 @@
 from pathlib import Path
 import json, os, queue, sys, time, traceback
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
+from session import GameSession, monitor
 import configure
 from hotkey import HotkeyWorker, SingleInstance, normalize
 from paths import mod_root
@@ -33,8 +34,10 @@ def atomic_text(path, text):
 
 
 class Panel:
-    def __init__(self, root, instance, auto_start=False):
+    def __init__(self, root, instance, auto_start=False, session=None):
         self.root = root
+        self.session = session
+        self.exiting = False
         self.instance = instance
         self.events = queue.Queue()
         self.worker = HotkeyWorker(self.events, instance.event)
@@ -128,7 +131,7 @@ class Panel:
         header.pack(fill="x")
         title = ttk.Label(header, text="影之刃零  /  HITSTOP", style="Title.TLabel")
         title.pack(side="left")
-        ttk.Label(header, text="0.4 预览", style="Dim.TLabel").pack(side="left", padx=10)
+        ttk.Label(header, text="0.4 预览 2", style="Dim.TLabel").pack(side="left", padx=10)
         ttk.Button(header, text="隐藏", width=6, command=self.hide).pack(side="right")
         for widget in (header, title):
             widget.bind("<ButtonPress-1>", self.drag_start)
@@ -292,7 +295,7 @@ class Panel:
         ttk.Separator(self.info_tab).pack(fill="x", pady=20)
         ttk.Label(
             self.info_tab,
-            text="默认 1 倍不会额外增强卡肉。\n关闭调整后，后续命中恢复原始帧数。\n退出调节器仅关闭面板；完全卸载需要重启游戏。",
+            text="默认 1 倍不会额外增强卡肉。\n关闭调整后，后续命中恢复原始帧数。\n游戏结束后面板自动退出；完全卸载需要重启游戏。",
             style="Dim.TLabel",
             wraplength=580,
         ).pack(anchor="w")
@@ -306,6 +309,8 @@ class Panel:
         ttk.Label(footer, text="设置自动保存", style="Dim.TLabel").pack(side="right")
         self.reload_config()
         self.root.after(50, self.poll)
+        if session is not None:
+            monitor(self.root, session, self.exit)
         self.root.update_idletasks()
         height = max(590, self.root.winfo_reqheight() + 10)
         width = max(650, self.root.winfo_reqwidth() + 10)
@@ -564,6 +569,12 @@ class Panel:
             return
         if self.loading:
             return
+        if self.session is not None and (
+            s.get("GamePid") != str(self.session.pid)
+            or s.get("GameCreatedAt") != str(self.session.created_at)
+        ):
+            self.connection.set("等待当前游戏会话初始化")
+            return
         if age > 8:
             self.connection.set("等待游戏继续运行 / Mod 重新连接")
         elif s["Fault"] == "true":
@@ -581,6 +592,31 @@ class Panel:
             and s.get("ObserveOnly") == "true"
         ):
             self.connection.set("Mod 已连接 · 仅记录，不修改帧数")
+        bootstrap = ""
+        try:
+            import configparser
+
+            info = configparser.ConfigParser(interpolation=None)
+            info.read(ROOT / "bootstrap.ini", encoding="utf-8-sig")
+            details = info["Session"]
+            bootstrap = (
+                "\n安装："
+                + details.get("Mode", "unknown")
+                + "  游戏 PID："
+                + details.get("GamePid", "?")
+                + "\nUE4SS："
+                + details.get("RuntimePath", "unknown")
+                + "\n运行库："
+                + (
+                    "已验证版本"
+                    if details.get("RuntimeVerified") == "true"
+                    else "未经实测，能力检测兼容"
+                )
+            )
+            if details.get("Error"):
+                bootstrap += "\n启动错误：" + details["Error"]
+        except (OSError, KeyError, ValueError, configparser.Error):
+            pass
         self.status_text.set(
             f"最近反馈 {s['Before']} → {s['After']} 帧    已处理 {s['Seen']} 次 / 已调整 {s['Changed']} 次"
             + "\n识别类别："
@@ -595,6 +631,8 @@ class Panel:
             + s.get("Material", "—")
             + "\n处理结果："
             + s.get("Reason", "—")
+            + ("\n错误：" + s["Error"] if s.get("Error") else "")
+            + bootstrap
         )
 
     def poll(self):
@@ -668,24 +706,47 @@ class Panel:
         self.root.after(100, self.poll)
 
     def exit(self):
+        if self.exiting:
+            return
+        self.exiting = True
         if self.save_after:
             self.root.after_cancel(self.save_after)
             self.save()
         self.worker.commands.put(("stop", None))
         self.worker.join(timeout=1)
         self.instance.close()
+        if self.session is not None:
+            self.session.close()
         self.root.destroy()
 
 
 def main():
     auto_start = "--auto-start" in sys.argv
-    instance = SingleInstance(notify=not auto_start)
+    try:
+        session = GameSession.from_arguments(ROOT)
+    except (OSError, ValueError, KeyError) as exc:
+        if not auto_start:
+            window = tk.Tk()
+            window.withdraw()
+            messagebox.showinfo("影之刃零 · 卡肉调节", str(exc), parent=window)
+            window.destroy()
+        return
+    instance = SingleInstance(notify=not auto_start, token=session.token)
     if instance.existing:
         instance.close()
+        session.close()
         return
-    root = tk.Tk()
-    Panel(root, instance, auto_start=auto_start)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        ui = Panel(root, instance, auto_start=auto_start, session=session)
+        try:
+            root.mainloop()
+        finally:
+            if not ui.exiting:
+                ui.exit()
+    finally:
+        instance.close()
+        session.close()
 
 
 if __name__ == "__main__":

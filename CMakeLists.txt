@@ -24,3 +24,17 @@ target_include_directories(dwmapi PRIVATE "${GENERATED}")
 target_link_libraries(dwmapi PRIVATE bcrypt shell32)
 target_link_options(dwmapi PRIVATE "/DEF:${GENERATED}/dwmapi.def" /DYNAMICBASE /NXCOMPAT /INCREMENTAL:NO)
 set_target_properties(dwmapi PROPERTIES PREFIX "" OUTPUT_NAME dwmapi)
+
+add_library(PBZBootstrap SHARED src/bootstrap.cpp)
+target_compile_features(PBZBootstrap PRIVATE cxx_std_17)
+target_compile_options(PBZBootstrap PRIVATE /W4 /utf-8 /permissive- /EHsc)
+target_include_directories(PBZBootstrap PRIVATE "${GENERATED}")
+target_link_libraries(PBZBootstrap PRIVATE bcrypt shell32)
+target_link_options(PBZBootstrap PRIVATE /DYNAMICBASE /NXCOMPAT /INCREMENTAL:NO)
+set_target_properties(PBZBootstrap PROPERTIES PREFIX "")
+
+# Test fixture is deliberately excluded from all release archives.
+add_executable(pbz_job_fixture tests/native_job_fixture.cpp)
+target_compile_features(pbz_job_fixture PRIVATE cxx_std_17)
+target_include_directories(pbz_job_fixture PRIVATE src)
+target_link_libraries(pbz_job_fixture PRIVATE bcrypt)

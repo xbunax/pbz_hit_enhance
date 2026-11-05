@@ -77,6 +77,17 @@ SlitheringSword 另支持配置中存在的 Slap 挥击类型；其他武器不�
 
 不要下载 Source code 当作安装包，也不要同时安装两种运行库。使用 SHA256SUMS.txt 核对下载文件。用户无需安装 Python、Visual Studio 或 ReShade。
 
+### 本次启动修复应该怎样安装
+
+| 当前情况 | 操作 |
+| --- | --- |
+| 首次单独安装卡肉 Mod | 使用 `with-UE4SS`，复制本项目的 `dwmapi.dll` 和 `PBZHitEnhance` 文件夹，无需安装木桩 Mod |
+| 已有其他来源且正常工作的 UE4SS | 使用 `mod-only`，更新实际 Mods 目录中的 `UnifiedHitstop` |
+| 已装旧卡肉整合包，游戏更新后无法启动 Mod | 必须更新本项目根目录 `dwmapi.dll` 和 `UnifiedHitstop`；只覆盖 Lua 或 mod-only 不会更新旧代理 |
+| 希望保留旧外置数据目录及其中的其他 Mod | 按下方“保留旧外置目录的升级步骤”操作，保留原 `PBZHitEnhance.ini` |
+
+新版 ZIP 通过手动复制安装，不包含 `Install.ps1` 或 `Uninstall.ps1`。安装位置是 **真实的 `<游戏目录>/platform/steam/PBZ.exe` 旁**，不是 Steam 客户端目录。卡肉和木桩分别提供独立整合包，不要将两个包的同名代理覆盖叠装。
+
 ### mod-only：已有 UE4SS 的用户
 
 1. 确认现有 UE4SS 能正常随游戏启动，然后完全退出游戏和调节面板。
@@ -139,6 +150,24 @@ SlitheringSword 另支持配置中存在的 Slap 挥击类型；其他武器不�
 **升级与旧安装迁移：**先备份原 `UnifiedHitstop` 中的 `config.ini` 和 `ui_settings.json`，替换后恢复。若游戏目录已有本项目的 `PBZHitEnhance.ini`，它可能仍指向旧的外置数据目录；使用上述默认手动布局时，将该文件备份并移出游戏目录，使加载器读取旁边的新版 `PBZHitEnhance` 文件夹。原配置若在外置目录，应先从那里备份。
 
 **卸载手动安装：**退出游戏和面板，将本整合包安装的 `dwmapi.dll` 移出游戏目录，即可停止自动加载。`PBZHitEnhance` 文件夹可备份后移出，以保留设置。只处理自己从本包复制的文件。
+
+### 保留旧外置目录的升级步骤
+
+适用于 `PBZ.exe` 旁已有 `PBZHitEnhance.ini`，并希望保留其中 `DataDirectory` 指向的原运行库与其他 Mod。下载 [v0.4.0-preview.3](https://github.com/xbunax/pbz_hit_enhance/releases/tag/v0.4.0-preview.3) 或后续版本的 `with-UE4SS` 包。
+
+1. 完全退出游戏和面板。记录 `PBZHitEnhance.ini` 的 `DataDirectory`，备份旧代理及实际 `ue4ss/Mods/UnifiedHitstop` 文件夹，尤其是 `config.ini` 和 `ui_settings.json`（若存在）。自定义 Mods 路径以运行库配置为准。
+2. 确认旧 `dwmapi.dll` 属于本项目后，用新包根目录的 `dwmapi.dll` 替换 `PBZ.exe` 旁的旧代理。
+3. 将新包内 `PBZHitEnhance/ue4ss/Mods/UnifiedHitstop` 的完整内容更新到原实际 `UnifiedHitstop` 目录，包括 `Scripts/PBZBootstrap.dll` 和 `panel`。随后恢复备份的 `config.ini` 和 `ui_settings.json`。
+4. **保留原 `PBZHitEnhance.ini`、UE4SS 设置、`mods.txt` 和其他 Mod**；不要将新包的默认 `mods.txt` 覆盖到旧运行库，也不要额外在 `PBZ.exe` 旁安装第二套 `ue4ss`。
+5. 从 Steam 重启游戏。查看原 `DataDirectory/logs/loader.log` 的本次启动记录：版本不同时允许出现 `untested_game_warning_continuing`，成功加载应有 `runtime_loaded`。如果本次仍出现 `unsupported_game_skipped`，说明实际使用的还是旧代理；若有其他加载错误，按对应日志排查。
+
+手动替换后，旧安装脚本记录中的文件哈希已过时，后续按手动方式维护。此路线保留原运行库布局；若要改为卡肉独立默认布局，按上方 with-UE4SS 的迁移说明备份配置、移出旧 `PBZHitEnhance.ini`，再安装本项目自己的 `PBZHitEnhance` 目录。
+
+### 从独立木桩安装切换为独立卡肉安装
+
+先退出游戏并备份木桩配置。确认 `PBZ.exe` 旁的 `dwmapi.dll` 和 `ue4ss` 均属于原木桩整合包后，将它们移到游戏目录外备份，再按卡肉 with-UE4SS 步骤安装。若还有其他 Mod 依赖该运行库，应先记录和备份其配置。不要仅覆盖同名 DLL 而留下另一套运行库：卡肉加载器检测到外部 UE4SS 时会停止整合加载。
+
+两个 Mod 各自独立运行不要求同时保留两个加载器。木桩的独立安装步骤见[木桩 README](https://github.com/xbunax/pbz_damage_test#readme)。
 
 ## 使用
 

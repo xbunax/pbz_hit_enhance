@@ -45,3 +45,13 @@
 退出游戏和调节面板，将自己从本整合包复制的 `dwmapi.dll` 移出游戏目录，停止自动加载。`PBZHitEnhance` 文件夹可备份后移出，以保留个人设置。若曾设置本项目的 `PBZHitEnhance.ini`，也将其备份并移出。
 
 该方式只处理本整合包文件，不删除共享 UE4SS 或其他 Mod。游戏正在运行时，移除文件不会卸载已经加载的代码，需要重新启动游戏才能生效。
+
+## 保留旧外置运行库的最小升级
+
+如果已有 PBZHitEnhance.ini 指向外置数据目录，而且希望保留其中的其他 Mod：退出游戏，备份旧文件，将本包根目录 dwmapi.dll 替换到 PBZ.exe 旁；将包内 PBZHitEnhance/ue4ss/Mods/UnifiedHitstop 的新版内容复制到实际外置 Mods/UnifiedHitstop，随后恢复 config.ini 和 ui_settings.json。保留原 PBZHitEnhance.ini、UE4SS 设置、mods.txt 和其他 Mod，不复制本包默认启用列表去覆盖它们。只有确认代理属于本项目时才替换。
+
+手动更新会使旧脚本安装记录中的文件哈希过时，后续按手动方式维护。本版发行包不含安装或卸载 PowerShell 脚本。使用默认布局迁移时，也应先备份旧外置运行库的其他 Mod 和启用列表，避免迁移后遗漏。
+
+本项目与 PBZ Damage Test 独立运行，本包不包含木桩。不要把两者的独立整合包覆盖叠装。
+
+完整使用说明：https://github.com/xbunax/pbz_hit_enhance#使用

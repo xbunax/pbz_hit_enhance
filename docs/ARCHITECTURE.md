@@ -4,7 +4,7 @@
 
 `dwmapi.dll` 为 x64 系统代理。导出表来自已检查的 dwmapi 导出清单，MASM 桩直接跳转到系统 DLL 的真实地址。转发在 DllMain 中准备；版本校验、加载 UE4SS 和启动面板由后台线程执行。
 
-后台只处理文件名为 PBZ.exe 且 SHA256 匹配的进程。默认从 DLL 旁的 PBZHitEnhance 查找数据；可由 PBZHitEnhance.ini 的 Paths/DataDirectory 覆盖。运行库校验通过后仅加载 ue4ss/UE4SS.dll。Mod 的 Lua 入口通过 PBZBootstrap.dll 启动面板，传入 --mod-dir 和真实游戏的 PID、创建时间与路径。不会注册服务或系统开机启动项。
+后台只处理文件名为 PBZ.exe 的进程；游戏 SHA256 与已测试版本不同只记录 untested_game_warning_continuing，不阻止加载。默认从 DLL 旁的 PBZHitEnhance 查找数据；可由 PBZHitEnhance.ini 的 Paths/DataDirectory 覆盖。运行库校验通过后仅加载 ue4ss/UE4SS.dll。Mod 的 Lua 入口通过 PBZBootstrap.dll 启动面板，传入 --mod-dir 和真实游戏的 PID、创建时间与路径。不会注册服务或系统开机启动项。
 
 `PBZHitEnhanceStatus` 为测试导出：2 表示非游戏进程被跳过；发布检查在 Python 测试宿主中验证不会加载 UE4SS。
 
@@ -60,7 +60,7 @@ DT_WeaponData 中 WeaponType 枚举值 1/2/3 对应 Blade/DoubleBlade/GreatBlade
 
 面板使用 SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION 打开游戏句柄，核对路径、PID 和 FILETIME 创建时间，每 250 ms 检查进程是否结束；不根据 Lua 心跳判断游戏退出。自动启动面板还由游戏持有的 KILL_ON_JOB_CLOSE Job 管理，子进程以挂起状态创建，加入 Job 后才恢复，且不继承 Job 句柄。面板自己监听进程退出作为另一条清理路径。真实 HWND/Tk 测试与原生生产启动函数测试分别验证正常及强制退出。
 
-PBZBootstrap 以 lua_CFunction 形式导出零参数启动入口，不读取 Lua 栈或导入 Lua/UE4SS SDK 符号；通过自身路径解析 Mod 的规范化目录。它校验游戏版本、读取实际已加载 UE4SS、建立游戏会话级所有者互斥，再启动面板。不同 Mod 副本的重复实例被拒绝；同一脚本被 UE4SS 正常重载时使用已初始化的本组件。允许状态、运行库路径与哈希写入 bootstrap.ini，启动故障另记 startup.log。status.ini 带会话身份，面板不把上一轮游戏的状态当成新会话。
+PBZBootstrap 以 lua_CFunction 形式导出零参数启动入口，不读取 Lua 栈或导入 Lua/UE4SS SDK 符号；通过自身路径解析 Mod 的规范化目录。它记录游戏是否匹配已测试版本、读取实际已加载 UE4SS、建立游戏会话级所有者互斥，再启动面板。未知游戏版本写入 GameVerified=false 和 GameWarning=untested_game_continuing，不作为启动失败。不同 Mod 副本的重复实例被拒绝；同一脚本被 UE4SS 正常重载时使用已初始化的本组件。允许状态、运行库路径与哈希写入 bootstrap.ini，启动故障另记 startup.log。status.ini 带会话身份，面板不把上一轮游戏的状态当成新会话。
 
 整合包使用自有代理和锁定运行库；发现外部 UE4SS、override.txt 或 --ue4ss-path 时停止自带加载。仅 Mod 包不含根目录代理、UE4SS.dll、公共设置或签名，复用用户现有运行库。Lua 检测接口后再初始化；对象尚未加载时等待，已找到对象而 Hook 失败时撤销本 Mod 已注册的 Hook 并保持停用。未知外部版本允许尝试，不等同于已验证兼容。
 

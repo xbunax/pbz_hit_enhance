@@ -29,7 +29,8 @@ $DataDirectory=Full $DataDirectory
 $exe=Join-Path $game 'PBZ.exe'
 $metadata=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'package.json') -Raw | ConvertFrom-Json
 if($metadata.mode -notin @('with-UE4SS','mod-only')){throw '安装包模式无效。'}
-if(!(Test-Path -LiteralPath $exe) -or (Hash $exe) -ne $metadata.game_hash){throw '请选择受支持的真实 platform\steam 游戏目录。'}
+if(!(Test-Path -LiteralPath $exe -PathType Leaf)){throw '请选择含 PBZ.exe 的真实 platform\steam 游戏目录。'}
+if((Hash $exe) -ne $metadata.game_hash){Write-Warning '游戏版本未经验证，将继续安装并尝试加载；请在游戏内确认兼容性。'}
 if(Get-Process -Name PBZ -ErrorAction SilentlyContinue){throw '请先正常退出游戏。'}
 $manifest=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'package_manifest.json') -Raw | ConvertFrom-Json
 foreach($entry in $manifest.PSObject.Properties) {

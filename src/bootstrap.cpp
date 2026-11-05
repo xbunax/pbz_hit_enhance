@@ -58,7 +58,9 @@ extern "C" __declspec(dllexport) int luaopen_pbz_bootstrap(void*) noexcept {
         const auto session=std::to_wstring(GetCurrentProcessId())+L"_"+std::to_wstring(created);
         std::ifstream mode_file(root/L"install-mode.txt");std::string mode;std::getline(mode_file,mode);
         fields="[Session]\nGamePid="+std::to_string(GetCurrentProcessId())+"\nGameCreatedAt="+std::to_string(created)+"\nGameExe="+utf8(game.wstring())+"\nModDir="+utf8(root.wstring())+"\nMode="+mode+"\n";
-        if(_wcsicmp(game.filename().c_str(),L"PBZ.exe")!=0 || !matches_hash(game,GAME_HASH))throw std::runtime_error("unsupported_game");
+        if(_wcsicmp(game.filename().c_str(),L"PBZ.exe")!=0)throw std::runtime_error("not_target_game");
+        const bool tested_game=matches_hash(game,GAME_HASH);
+        fields+="GameVerified="+std::string(tested_game?"true":"false")+"\nGameWarning="+(tested_game?"":"untested_game_continuing")+"\n";
         int argc=0;auto argv=CommandLineToArgvW(GetCommandLineW(),&argc);bool disabled=false;
         if(argv){for(int i=1;i<argc;++i)if(wcscmp(argv[i],L"--disable-unified-hitstop")==0||wcscmp(argv[i],L"--disable-ue4ss")==0)disabled=true;LocalFree(argv);}
         if(disabled || fs::exists(root/L"disabled.flag"))throw std::runtime_error("disabled");

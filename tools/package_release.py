@@ -88,19 +88,10 @@ def main():
             + "\n",
             encoding="utf-8",
         )
-        (package / "docs").mkdir()
-        for name in ["INSTALL_with-UE4SS.md", "INSTALL_mod-only.md", "ARCHITECTURE.md"]:
-            shutil.copy2(ROOT / "docs" / name, package / "docs" / name)
         for name in ["LICENSE", "THIRD_PARTY_NOTICES.md"]:
             shutil.copy2(ROOT / name, package / name)
-        for name in ["Install.ps1", "Uninstall.ps1"]:
-            (package / name).write_text(
-                (ROOT / "tools" / name).read_text(encoding="utf-8-sig"), encoding="utf-8-sig"
-            )
         (package / "README.md").write_text(
-            (ROOT / "docs" / ("INSTALL_" + mode + ".md")).read_text(encoding="utf-8")
-            + "\n\n"
-            + (ROOT / "README.md").read_text(encoding="utf-8"),
+            (ROOT / "docs" / ("INSTALL_" + mode + ".md")).read_text(encoding="utf-8"),
             encoding="utf-8",
         )
         licenses = mod / "licenses"
@@ -116,6 +107,16 @@ def main():
             for p in sorted(package.rglob("*"))
             if p.is_file()
         }
+        forbidden = {".ps1", ".bat", ".cmd", ".py", ".pdb", ".lib", ".exp", ".zip"}
+        # PyInstaller's standard-library archive is required by the panel runtime.
+        runtime_zip = (mod / "panel/_internal/base_library.zip").relative_to(package).as_posix()
+        unexpected = [
+            name
+            for name in manifest
+            if Path(name).suffix.lower() in forbidden and name != runtime_zip
+        ]
+        if unexpected:
+            raise RuntimeError("Non-runtime files in package: " + repr(unexpected))
         (package / "package_manifest.json").write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
         )

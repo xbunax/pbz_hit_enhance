@@ -121,6 +121,19 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual({p: sha(p) for p in shared_hashes}, shared_hashes)
         self.assertTrue((new / "config.ini").exists())
 
+    def test_updated_game_does_not_block_installation(self):
+        p = self.package("with-UE4SS")
+        (self.game / "PBZ.exe").write_bytes(b"updated fake executable, never run")
+        self.invoke(p)
+        self.assertTrue((self.game / "dwmapi.dll").is_file())
+        self.assertTrue((Path(self.record()["data"]) / "ue4ss/UE4SS.dll").is_file())
+
+    def test_missing_game_executable_still_fails(self):
+        p = self.package("with-UE4SS")
+        (self.game / "PBZ.exe").unlink()
+        self.invoke(p, ok=False)
+        self.assertFalse(self.data.exists())
+
     def test_existing_proxy_is_never_overwritten(self):
         p = self.package("with-UE4SS")
         dll = self.game / "dwmapi.dll"

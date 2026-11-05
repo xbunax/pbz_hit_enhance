@@ -64,6 +64,15 @@ def verify_package(package):
     assert mode in ("with-UE4SS", "mod-only"), mode
     manifest = json.loads((package / "package_manifest.json").read_text())
     actual = {p.relative_to(package).as_posix() for p in package.rglob("*") if p.is_file()}
+    forbidden = {".ps1", ".bat", ".cmd", ".py", ".pdb", ".lib", ".exp", ".zip"}
+    mod_prefix = (
+        "PBZHitEnhance/ue4ss/Mods/UnifiedHitstop" if mode == "with-UE4SS" else "UnifiedHitstop"
+    )
+    runtime_zip = mod_prefix + "/panel/_internal/base_library.zip"
+    assert not any(Path(n).suffix.lower() in forbidden and n != runtime_zip for n in actual), (
+        "Non-runtime files"
+    )
+    assert not (package / "docs").exists(), "Developer and duplicate documents must not ship"
     assert actual == set(manifest) | {"package_manifest.json"}, "Unlisted package files"
     for name, expected in manifest.items():
         path = (package / name).resolve()

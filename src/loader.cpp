@@ -67,7 +67,9 @@ DWORD WINAPI start_mod(void *argument) {
         fs::create_directories(root/L"logs");
         if(disabled(root)){set_status(Status::disabled);record(root,"disabled_skipped");return 0;}
         record(root,"game_start_detected");
-        if(!matches_hash(game,GAME_HASH)){set_status(Status::game_mismatch);record(root,"unsupported_game_skipped");return 0;}
+        // The recorded hash identifies a tested build, not a load allowlist.
+        // Game updates may remain compatible; let UE4SS report actual failures.
+        if(!matches_hash(game,GAME_HASH))record(root,"untested_game_warning_continuing");
         const auto runtime_path=root/L"ue4ss"/L"UE4SS.dll";
         if(!matches_hash(runtime_path,RUNTIME_HASH)){set_status(Status::runtime_mismatch);record(root,"runtime_checksum_failed");return 0;}
         int count=0;LPWSTR* args=CommandLineToArgvW(GetCommandLineW(),&count);
